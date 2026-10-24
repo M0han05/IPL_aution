@@ -11,7 +11,8 @@ const DATA = path.join(ROOT, 'data');
 const TEAMS = { CSK: 'Chennai Super Kings', MI: 'Mumbai Indians', RCB: 'Royal Challengers Bengaluru', KKR: 'Kolkata Knight Riders', RR: 'Rajasthan Royals', DC: 'Delhi Capitals', SRH: 'Sunrisers Hyderabad', LSG: 'Lucknow Super Giants', GT: 'Gujarat Titans', PBKS: 'Punjab Kings' };
 
 /* ---------- rules (amounts in lakh) ---------- */
-const MEGA = { purse: 13000, slab: [1800, 1400, 1100, 1800, 1400], unc: 300, max: 6, maxCap: 5, maxUnc: 2 };
+const MEGA = { purse: 13000, slab: [2000, 1800, 1800, 1800, 1800], unc: 400, max: 5, maxCap: 5, maxUnc: 2, rtmMax: 4 };
+const MAX_PLAYER_PRICE = 2500; // ₹25 Cr ceiling on any single buy
 const MINI = { purse: 7500 };
 const MAXSQ = 25, MINSQ = 18, MAXOS = 8;
 const BID_DEFAULT = 15000, RESET_MS = 10000, RTM_MS = 12000, BREAK_MS = 4500, UNSOLD_MS = 2500;
@@ -45,6 +46,7 @@ function view(r) {
     setLabel: r.setLabel || null, marquee: r.marquee || [],
     members: Object.entries(r.members).map(([cid, m]) => ({ cid, name: m.name, team: m.team, online: !!m.sid })),
     teams: r.teams, cur: r.cur, idx: r.i, total: r.list ? r.list.length : 0, acc: !!r.acc, rtmTeam: r.rtmTeam || null, log: r.log || [],
+    chat: (r.chat || []).slice(-40), setOrder: r.setOrder || null,
   };
 }
 let io;
@@ -60,7 +62,7 @@ function checkRet(r, team, ids) {
   if (ps.filter(p => p.os).length > MAXOS) return 'Maximum 8 overseas players';
   if (r.mode === 'mini') return ps.length > MAXSQ ? 'Squad limit is 25' : { cost: 0 };
   const cap = ps.filter(p => p.capped).length, unc = ps.length - cap;
-  if (ps.length > MEGA.max || cap > MEGA.maxCap || unc > MEGA.maxUnc) return 'Retention limit exceeded (6 total, 5 capped, 2 uncapped)';
+  if (ps.length > MEGA.max || cap > MEGA.maxCap || unc > MEGA.maxUnc) return 'Retention limit exceeded (5 total, 5 capped, 2 uncapped)';
   return { cost: ps.reduce((s, p) => s + retCost(ps, p), 0) };
 }
 
@@ -75,7 +77,7 @@ function startAuction(r) {
     const ps = t.retained.map(i => PL[i]);
     t.squad = ps.map(p => ({ id: p.id, price: r.mode === 'mega' ? retCost(ps, p) : 0, ret: 1 }));
     t.purse -= t.cost;
-    t.rtm = r.mode === 'mega' ? MEGA.max - ps.length : 0;
+    t.rtm = r.mode === 'mega' ? MEGA.rtmMax : 0;
     t.retained.forEach(i => kept.add(i));
   }
   const pool = PL.filter(p => !kept.has(p.id));
@@ -126,6 +128,7 @@ function why(r, code, price, p) {
   if (r.cur.by === code) return 'You are the highest bidder';
   if (t.squad.length >= MAXSQ) return 'Squad is full (25)';
   if (p.os && t.squad.filter(x => PL[x.id].os).length >= MAXOS) return 'Overseas limit (8) reached';
+  if (price > MAX_PLAYER_PRICE) return 'Max price is ₹25 Cr for one player';
   if (t.purse < price) return 'Not enough purse';
   if (t.purse - price < Math.max(0, MINSQ - t.squad.length - 1) * 20) return 'Must keep purse to reach 18 players';
   return '';
@@ -187,7 +190,7 @@ function act(r, cid, type, p) {
       const cl = claimed(r);
       if (cl.length < 1) return 'At least 1 team is needed';
       r.phase = 'retention'; r.teams = {}; r.bidMs = r.bidMs || BID_DEFAULT;
-      cl.forEach(c => (r.teams[c] = { purse: r.mode === 'mega' ? MEGA.purse : MINI.purse, squad: [], rtm: r.mode === 'mega' ? MEGA.max : 0, ready: false, retained: [], cost: 0 }));
+      cl.forEach(c => (r.teams[c] = { purse: r.mode === 'mega' ? MEGA.purse : MINI.purse, squad: [], rtm: r.mode === 'mega' ? MEGA.rtmMax : 0, ready: false, retained: [], cost: 0, xi: [] }));
       break;
     }
     case 'ret': {
@@ -257,6 +260,60 @@ function act(r, cid, type, p) {
       r.marquee = p.slice(0, 15).map(Number).filter(i => PL[i]);
       break;
     }
+    case 'endAuction': {
+      if (!host || r.phase !== 'auction') return 'Only host can end auction';
+      const all18 = Object.values(r.teams).every(t => t.squad.length >= MINSQ);
+      if (!all18) return 'Every team must have at least 18 players before you can end';
+      clearTimeout(r.tmr);
+      endAuction(r);
+      break;
+    }
+    case 'jumpSet': {
+      if (!host || r.phase !== 'auction') return 'Only host can change set';
+      const set = String(p || '');
+      const order = ['MARQUEE', 'BAT_WK', 'AR', 'BOWL'];
+      if (!order.includes(set)) return 'Unknown set';
+      // Rebuild remaining list: put chosen set first among remaining players
+      const done = new Set();
+      for (const t of Object.values(r.teams)) t.squad.forEach(x => done.add(x.id));
+      (r.list || []).slice(0, r.i + 1).forEach(id => done.add(id));
+      const marqueeIds = new Set(r.marquee || []);
+      const roleOf = id => {
+        const pl = PL[id];
+        if (!pl) return 'BOWL';
+        if (marqueeIds.has(id)) return 'MARQUEE';
+        if (pl.role === 'WK' || pl.role === 'BAT') return 'BAT_WK';
+        if (pl.role === 'AR') return 'AR';
+        return 'BOWL';
+      };
+      const remaining = (r.list || []).slice(r.i + (r.sub === 'break' ? 1 : 0)).filter(id => !done.has(id));
+      // if mid-lot, keep current then jump
+      const rest = remaining.filter(id => id !== r.cur?.id);
+      const buckets = { MARQUEE: [], BAT_WK: [], AR: [], BOWL: [] };
+      for (const id of rest) buckets[roleOf(id)].push(id);
+      const newList = [];
+      // chosen set first
+      newList.push(...shuffle(buckets[set] || []));
+      for (const k of order) if (k !== set) newList.push(...shuffle(buckets[k] || []));
+      if (r.cur && r.sub === 'bid') {
+        r.list = [r.cur.id, ...newList];
+        r.i = 0;
+      } else {
+        r.list = newList;
+        r.i = 0;
+        nextLot(r);
+      }
+      r.setOrder = [set, ...order.filter(x => x !== set)];
+      break;
+    }
+    case 'xi': {
+      if (r.phase !== 'end' || !t) return 'Pick playing XI after auction ends';
+      if (!Array.isArray(p) || p.length > 11) return 'Select up to 11 players';
+      const ids = p.map(Number);
+      if (ids.some(i => !t.squad.some(x => x.id === i))) return 'Only squad players allowed';
+      t.xi = ids.slice(0, 11);
+      break;
+    }
     default: return 'Unknown action';
   }
   return null;
@@ -278,7 +335,7 @@ io.on('connection', s => {
       const id = String(d?.cid || '');
       if (!name || id.length < 8) return ack?.({ ok: false, error: 'Enter your name' });
       let room;
-      if (d.create) { const code = mkCode(); room = { code, host: id, mode: 'mega', phase: 'lobby', members: {}, teams: {}, bidMs: BID_DEFAULT, opts: { sellNow: false, markUnsold: false, forceUnsold: false, sets: true }, marquee: [] }; rooms.set(code, room); }
+      if (d.create) { const code = mkCode(); room = { code, host: id, mode: 'mega', phase: 'lobby', members: {}, teams: {}, bidMs: BID_DEFAULT, opts: { sellNow: false, markUnsold: false, forceUnsold: false, sets: true }, marquee: [], chat: [], setOrder: ['MARQUEE', 'BAT_WK', 'AR', 'BOWL'] }; rooms.set(code, room); }
       else { room = rooms.get(String(d.code || '').toUpperCase().trim()); if (!room) return ack?.({ ok: false, error: 'Room not found' }); }
       if (!room.members[id] && Object.keys(room.members).length >= 30) return ack?.({ ok: false, error: 'Room is full' });
       r = room; cid = id;
@@ -286,6 +343,7 @@ io.on('connection', s => {
       m.name = name; m.sid = s.id; clearTimeout(r.gc);
       s.join(r.code);
       s.emit('catalog', { players: PL, teams: TEAMS });
+      if (r.chat?.length) s.emit('chat', r.chat);
       ack?.({ ok: true, code: r.code });
       push(r);
     } catch (e) { console.error(e); ack?.({ ok: false, error: 'Server error' }); }
@@ -296,6 +354,18 @@ io.on('connection', s => {
     try { e = act(r, cid, type, p); } catch (x) { console.error(x); e = 'Server error'; }
     ack?.(e ? { ok: false, error: e } : { ok: true });
     push(r);
+  });
+  s.on('chat', (msg, ack) => {
+    if (!r || !r.members[cid]) return ack?.({ ok: false });
+    const text = String(msg?.text || '').trim().slice(0, 300);
+    const gif = String(msg?.gif || '').trim().slice(0, 400);
+    if (!text && !gif) return ack?.({ ok: false });
+    // allow http(s) gif urls only
+    if (gif && !/^https:\/\//i.test(gif)) return ack?.({ ok: false, error: 'Invalid gif url' });
+    const m = r.members[cid];
+    r.chat = [...(r.chat || []), { id: Date.now() + Math.random(), name: m.name, team: m.team, text, gif, at: Date.now() }].slice(-50);
+    io.to(r.code).emit('chat', r.chat);
+    ack?.({ ok: true });
   });
   s.on('disconnect', () => {
     if (!r) return;
@@ -308,4 +378,4 @@ io.on('connection', s => {
   });
 });
 const PORT = process.env.PORT || 3001;
-srv.listen(PORT, () => console.log(`Auction server on http://localhost:${PORT}`));
+srv.listen(PORT, '0.0.0.0', () => console.log(`Auction server on http://0.0.0.0:${PORT} (open from phone: http://YOUR-PC-IP:${PORT})`));

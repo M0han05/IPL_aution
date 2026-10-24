@@ -124,3 +124,20 @@ table{width:100%;border-collapse:collapse;font-size:13px}td,th{padding:6px 4px;t
   .home-lead{font-size:14px}
   .home-steps{font-size:13px;padding-left:16px}
 }
+
+.chat-wrap{position:fixed;right:12px;bottom:12px;z-index:60;display:flex;flex-direction:column;align-items:flex-end;gap:8px}
+.chat-fab{box-shadow:0 8px 24px #0006}
+.chat-panel{width:min(340px,92vw);max-height:55vh;display:flex;flex-direction:column;gap:8px;padding:12px}
+.chat-msgs{flex:1;overflow-y:auto;max-height:220px;display:flex;flex-direction:column;gap:6px}
+.chat-line{background:#0a1022;border-radius:10px;padding:6px 8px;font-size:13px}
+.chat-line.mine{border:1px solid var(--ok)}
+.chat-line b{font-size:11px;color:var(--mu)}
+.chat-gif{max-width:100%;border-radius:8px;margin-top:4px}
+.chat-emojis{display:flex;flex-wrap:wrap;gap:4px}
+.chat-emojis button{background:#0a1022;border:1px solid var(--bd);border-radius:8px;padding:4px 6px;font-size:16px;cursor:pointer}
+.chat-gifs{display:flex;gap:6px;overflow-x:auto}
+.gif-btn{border:0;padding:0;background:transparent;cursor:pointer;border-radius:8px;overflow:hidden;width:56px;height:42px;flex:none}
+.gif-btn img{width:100%;height:100%;object-fit:cover}
+@media(max-width:640px){
+  .chat-panel{width:min(100vw - 24px,100%);max-height:50vh}
+}

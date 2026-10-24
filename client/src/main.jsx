@@ -15,7 +15,7 @@ const makeId = () => {
 const cid = localStorage.cid || (localStorage.cid = makeId());
 const COL = { CSK: '#e0a800', MI: '#0a58b5', RCB: '#c8102e', KKR: '#5b2d91', RR: '#ea1a85', DC: '#1f7fd1', SRH: '#f26522', LSG: '#0f8fb3', GT: '#1c4a6e', PBKS: '#c4163c' };
 const ROLE = { BAT: 'Batter', WK: 'Wicketkeeper', AR: 'All-rounder', BOWL: 'Bowler' };
-const SLAB = [1800, 1400, 1100, 1800, 1400], UNC = 300;
+const SLAB = [2000, 1800, 1800, 1800, 1800], UNC = 400;
 const cr = l => (l >= 100 ? `₹${+(l / 100).toFixed(2)} Cr` : `₹${l} L`);
 const inc = b => (b < 100 ? 5 : b < 200 ? 10 : b < 500 ? 20 : 25);
 const osCount = (t, P) => t.squad.filter(x => P[x.id].os).length;
@@ -74,15 +74,21 @@ function Home({ join, flash }) {
         <ol className="home-steps">
           <li><b>Create</b> a room (you become host) or <b>Join</b> with a 5-letter code.</li>
           <li>Each person picks one <b>franchise</b>. Host can start even with 1 team.</li>
-          <li><b>Retention</b> (Mega): keep up to 6 core players, then RTM cards for the rest.</li>
+          <li><b>Retention</b> (Mega): keep up to 5 core players; each team has 4 RTM cards.</li>
           <li><b>Auction</b>: bid live. Max <b>8 overseas</b>, squad <b>18–25</b> players.</li>
           <li>Host can <b>Pause / Continue</b>. After the end, <b>Analyse &amp; rank</b> squads.</li>
         </ol>
         <div className="home-chips">
           <span className="chip p">Mega ₹130 Cr</span>
           <span className="chip p">Mini ₹75 Cr</span>
-          <span className="chip">No AI teams</span>
-          <span className="chip">Phone friendly</span>
+          <span className="chip">Max ₹25 Cr / player</span>
+          <span className="chip">4 RTM cards</span>
+          <span className="chip">Squad 18–25 · 8 OS</span>
+        </div>
+        <div className="mu" style={{ marginTop: 12, fontSize: 13, lineHeight: 1.5 }}>
+          <b style={{ color: 'var(--tx)' }}>Bidding rules:</b> increments rise with price. No player can be bought above <b style={{ color: 'var(--tx)' }}>₹25 Cr</b>.
+          Mega retentions: 1st capped <b style={{ color: 'var(--tx)' }}>₹20 Cr</b>, next capped <b style={{ color: 'var(--tx)' }}>₹18 Cr</b> each (max 5). Uncapped ₹4 Cr. Each team gets <b style={{ color: 'var(--tx)' }}>4 RTM</b> cards.
+          After auction, pick a <b style={{ color: 'var(--tx)' }}>playing XI (11)</b> for ranking (all-rounders can bowl in the analysis).
         </div>
       </div>
 
@@ -118,7 +124,7 @@ function Lobby({ rs, cat, me, act, host }) {
           {host && <div className="seg">{['mega', 'mini'].map(m => <button key={m} className={rs.mode === m ? 'on' : ''} onClick={() => act('mode', m)}>{m === 'mega' ? 'Mega' : 'Mini'}</button>)}</div>}
         </div>
       </div>
-      <div className="mu">{rs.mode === 'mega' ? 'Mega: ₹130 Cr purse, up to 6 retentions (5 capped + 2 uncapped), RTM cards for the rest.' : 'Mini: ₹75 Cr purse, keep any players free, no RTM.'}</div>
+      <div className="mu">{rs.mode === 'mega' ? 'Mega: ₹130 Cr purse, up to 5 retentions (1st ₹20 Cr, next ₹18 Cr), 4 RTM cards.' : 'Mini: ₹75 Cr purse, keep any players free, no RTM.'}</div>
       <div className="teams">
         {Object.entries(cat.teams).map(([c, nme]) => {
           const m = taken[c], mine = m && m.cid === cid;
@@ -181,7 +187,7 @@ function Retention({ rs, cat, me, act, host }) {
   const nc = ps.filter(p => p.capped).length, nu = ps.length - nc;
   const cost = t ? t.cost : 0;
   const allReady = Object.values(rs.teams).every(x => x.ready);
-  const blocked = p => !sel.includes(p.id) && mega && (ps.length >= 6 || (p.capped ? nc >= 5 : nu >= 2));
+  const blocked = p => !sel.includes(p.id) && mega && (ps.length >= 5 || (p.capped ? nc >= 5 : nu >= 2));
   const price = p => { const i = sel.indexOf(p.id); if (i < 0 || !mega) return ''; return cr(p.capped ? SLAB[ps.filter(x => x.capped).indexOf(p)] : UNC); };
   const toggle = p => { if (t.ready) return; act('ret', sel.includes(p.id) ? sel.filter(i => i !== p.id) : [...sel, p.id]); };
   return (
@@ -192,7 +198,7 @@ function Retention({ rs, cat, me, act, host }) {
             <div>
               <div className="chip p">{mega ? 'MEGA AUCTION' : 'MINI AUCTION'}</div>
               <h1>Build your <em>core squad</em></h1>
-              <div className="mu">{mega ? 'Retain up to 6 players from your roster. Capped slabs 18, 14, 11, 18, 14 Cr. Uncapped 3 Cr each.' : 'Keep any players for free. Everyone else goes to the pool.'}</div>
+              <div className="mu">{mega ? 'Retain up to 5 players. Capped: 1st ₹20 Cr, then ₹18 Cr each. Uncapped ₹4 Cr. 4 RTM cards.' : 'Keep any players for free. Everyone else goes to the pool.'}</div>
             </div>
             <div className="card"><div className="mu">REMAINING PURSE</div><b style={{ fontSize: 32, color: 'var(--ok)' }}>{cr(t.purse - cost)}</b></div>
           </div>
@@ -372,6 +378,7 @@ function Auction({ rs, cat, me, act, host, left }) {
   else if (c.by === me.team) why = 'You are leading';
   else if (my.squad.length >= 25) why = 'Squad full';
   else if (p.os && osCount(my, P) >= 8) why = 'Overseas limit reached';
+  else if (price > 2500) why = 'Max ₹25 Cr';
   else if (my.purse < price) why = 'Not enough purse';
   else if (my.purse - price < Math.max(0, 17 - my.squad.length) * 20) why = 'Keep purse for 18 players';
   const secs = Math.ceil(left / 1000);
@@ -401,6 +408,13 @@ function Auction({ rs, cat, me, act, host, left }) {
               <button className="btn" style={{ padding: '6px 12px', fontSize: 12, background: rs.paused ? 'var(--ok)' : undefined }} onClick={() => act('pause')}>
                 {rs.paused ? '▶ Continue auction' : '⏸ Pause / rest'}
               </button>
+            )}
+            {host && (
+              <button className="btn sec" style={{ padding: '6px 10px', fontSize: 11 }} onClick={() => {
+                const all18 = Object.values(rs.teams).every(tm => tm.squad.length >= 18);
+                if (!all18) { alert('Every team needs at least 18 players to end the auction'); return; }
+                act('endAuction');
+              }}>End auction</button>
             )}
           </div>
         </div>
@@ -457,6 +471,16 @@ function Auction({ rs, cat, me, act, host, left }) {
             {rs.opts?.forceUnsold && <button className="btn sec" disabled={!(rs.sub === 'bid' && !rs.paused)} onClick={() => act('forceUnsold')}>Force unsold</button>}
           </div>
         )}
+        {host && (
+          <div style={{ marginTop: 10 }}>
+            <div className="mu" style={{ marginBottom: 6 }}>Jump to set (remaining players)</div>
+            <div className="seg" style={{ flexWrap: 'wrap' }}>
+              {[['MARQUEE', 'Marquee'], ['BAT_WK', 'Bat/WK'], ['AR', 'AR'], ['BOWL', 'Bowlers']].map(([k, lab]) => (
+                <button key={k} type="button" onClick={() => act('jumpSet', k)}>{lab}</button>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
       <div className="card">
         {rs.setLabel && <div className="chip" style={{ marginBottom: 10 }}>{rs.setLabel} SET</div>}
@@ -485,42 +509,48 @@ function Auction({ rs, cat, me, act, host, left }) {
   );
 }
 
-function End({ rs, cat }) {
+function End({ rs, cat, me, act }) {
   const P = cat.players;
   const [showRank, setShowRank] = useState(false);
+  const my = me?.team && rs.teams[me.team];
+  const myXi = my?.xi || [];
 
-  // Score each player from career-ish stats available in catalog
-  const scorePlayer = (p) => {
+  const scorePlayer = (p, asBowler) => {
     if (!p) return 0;
     let s = 0;
     const m = p.m || 0;
-    if (p.role === 'BOWL') {
+    if (p.role === 'BOWL' || asBowler) {
       s += (p.wkts || 0) * 8;
       s += m * 1.5;
       if (p.econ != null) s += Math.max(0, 12 - p.econ) * 15;
-    } else if (p.role === 'AR') {
-      s += (p.runs || 0) * 0.08;
-      s += (p.wkts || 0) * 6;
-      s += m * 1.2;
-      if (p.sr) s += Math.max(0, p.sr - 120) * 0.4;
-    } else {
-      s += (p.runs || 0) * 0.1;
-      s += m * 1.5;
-      if (p.sr) s += Math.max(0, p.sr - 120) * 0.5;
     }
+    if (p.role !== 'BOWL' || p.role === 'AR') {
+      s += (p.runs || 0) * 0.1;
+      s += m * 1.2;
+      if (p.sr) s += Math.max(0, p.sr - 120) * 0.45;
+    }
+    if (p.role === 'AR') s += (p.wkts || 0) * 5;
     if (p.capped) s *= 1.05;
     return Math.round(s);
   };
 
+  const toggleXi = (id) => {
+    if (!my) return;
+    let next = myXi.includes(id) ? myXi.filter(x => x !== id) : [...myXi, id];
+    if (next.length > 11) next = next.slice(-11);
+    act('xi', next);
+  };
+
   const teamRanks = useMemo(() => {
-    return Object.entries(rs.teams).map(([code, t]) => {
-      const players = t.squad.map(x => {
-        const p = P[x.id];
-        return { ...p, price: x.price, ret: x.ret, score: scorePlayer(p) };
-      }).sort((a, b) => b.score - a.score);
+    return Object.entries(rs.teams).map(([code, tm]) => {
+      const xiIds = (tm.xi && tm.xi.length) ? tm.xi : tm.squad.map(x => x.id).slice(0, 11);
+      const players = xiIds.map(id => {
+        const p = P[id];
+        const asBowl = p && (p.role === 'BOWL' || p.role === 'AR');
+        return { ...p, score: scorePlayer(p, asBowl) };
+      }).filter(Boolean).sort((a, b) => b.score - a.score);
       const total = players.reduce((s, p) => s + p.score, 0);
-      const avg = players.length ? total / players.length : 0;
-      return { code, t, players, total, avg, spent: t.squad.reduce((s, x) => s + x.price, 0) };
+      return { code, tm, players, total, xiCount: xiIds.length };
     }).sort((a, b) => b.total - a.total);
   }, [rs.teams, P]);
 
@@ -529,35 +559,24 @@ function End({ rs, cat }) {
       <div className="grid">
         <div className="card row" style={{ justifyContent: 'space-between' }}>
           <div>
-            <h1>Team <em>rankings</em></h1>
-            <div className="mu">Based on squad player stats (matches, runs, SR, wickets, economy). Higher score = stronger paper squad.</div>
+            <h1>XI <em>rankings</em></h1>
+            <div className="mu">Based on selected playing XI (11). All-rounders get batting + bowling credit.</div>
           </div>
-          <button className="btn sec" onClick={() => setShowRank(false)}>Back to squads</button>
+          <button className="btn sec" onClick={() => setShowRank(false)}>Back</button>
         </div>
         {teamRanks.map((tr, i) => (
           <div className="card" key={tr.code}>
-            <div className="row" style={{ marginBottom: 10 }}>
-              <div style={{ fontSize: 28, fontWeight: 900, width: 48, color: i === 0 ? 'var(--ac)' : '#9aa3c4' }}>#{i + 1}</div>
-              <Logo code={tr.code} s={48} />
+            <div className="row" style={{ marginBottom: 8 }}>
+              <div style={{ fontSize: 26, fontWeight: 900, width: 44, color: i === 0 ? 'var(--ac)' : '#9aa3c4' }}>#{i + 1}</div>
+              <Logo code={tr.code} s={44} />
               <div style={{ flex: 1 }}>
                 <h3 style={{ margin: 0 }}>{cat.teams[tr.code]}</h3>
-                <div className="mu">Score {tr.total} · Avg {Math.round(tr.avg)} · {tr.players.length} players · Spent {cr(tr.spent)}</div>
+                <div className="mu">XI score {tr.total} · {tr.xiCount}/11 selected</div>
               </div>
             </div>
-            <table>
-              <thead><tr><th>#</th><th>Player</th><th>Role</th><th>Stats score</th><th>Price</th></tr></thead>
-              <tbody>
-                {tr.players.map((p, j) => (
-                  <tr key={p.id}>
-                    <td>{j + 1}</td>
-                    <td>{p.name}{p.ret ? ' (R)' : ''}{p.os ? ' · OS' : ''}</td>
-                    <td>{ROLE[p.role]}</td>
-                    <td><b>{p.score}</b></td>
-                    <td>{p.price > 0 ? cr(p.price) : 'Ret'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <table><tbody>{tr.players.map((p, j) => (
+              <tr key={p.id}><td>{j + 1}</td><td>{p.name}{p.role === 'AR' ? ' · AR' : ''}</td><td>{ROLE[p.role]}</td><td><b>{p.score}</b></td></tr>
+            ))}</tbody></table>
           </div>
         ))}
       </div>
@@ -566,20 +585,33 @@ function End({ rs, cat }) {
 
   return (
     <div className="grid">
-      <div className="card row" style={{ justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
-        <div>
-          <h1>Auction <em>complete</em></h1>
-          <div className="mu">Min 18 / max 25 players · max 8 overseas. Check squad validity below.</div>
-        </div>
-        <button className="btn big" onClick={() => setShowRank(true)}>Analyse &amp; rank teams</button>
+      <div className="card">
+        <h1>Auction <em>complete</em></h1>
+        <div className="mu">Pick your <b>playing XI (11)</b> for analysis. AR counts for batting and bowling. Then rank teams.</div>
+        <button className="btn" style={{ marginTop: 12 }} onClick={() => setShowRank(true)}>Analyse &amp; rank teams</button>
       </div>
-      {Object.entries(rs.teams).map(([code, t]) => {
-        const spent = t.squad.reduce((s, x) => s + x.price, 0);
-        const valid = t.squad.length >= 18 && t.squad.length <= 25 && osCount(t, P) <= 8;
+      {my && (
+        <div className="card">
+          <h3>Your playing XI ({myXi.length}/11)</h3>
+          <div className="mu" style={{ marginBottom: 8 }}>Tap players from your squad to select / deselect</div>
+          <div className="row" style={{ flexWrap: 'wrap', gap: 6 }}>
+            {my.squad.map(x => {
+              const on = myXi.includes(x.id);
+              const pl = P[x.id];
+              return (
+                <button key={x.id} type="button" className="btn sec" style={{ opacity: on ? 1 : 0.55, borderColor: on ? 'var(--ok)' : undefined, fontSize: 12, padding: '8px 10px' }} onClick={() => toggleXi(x.id)}>
+                  {on ? '✓ ' : ''}{pl?.name} · {ROLE[pl?.role] || ''}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+      {Object.entries(rs.teams).map(([code, tm]) => {
+        const spent = tm.squad.reduce((s, x) => s + x.price, 0);
         return (
           <div className="card" key={code}>
-            <div className="row"><Logo code={code} s={44} /><div><h3 style={{ margin: 0 }}>{cat.teams[code]}</h3><div className="mu">{t.squad.length} players · {osCount(t, P)}/8 overseas · Spent {cr(spent)} · Left {cr(t.purse)} · {valid ? 'Valid squad' : t.squad.length < 18 ? `Needs ${18 - t.squad.length} more` : 'Check limits'}</div></div></div>
-            <table><tbody>{t.squad.map(x => <tr key={x.id}><td>{P[x.id].name}{x.ret ? ' (R)' : ''}</td><td>{ROLE[P[x.id].role]}{P[x.id].os ? ' · OS' : ''}</td><td>{cr(x.price)}</td></tr>)}</tbody></table>
+            <div className="row"><Logo code={code} s={40} /><div><h3 style={{ margin: 0 }}>{cat.teams[code]}</h3><div className="mu">{tm.squad.length} players · RTM left {tm.rtm} · Spent {cr(spent)} · XI {(tm.xi || []).length}/11</div></div></div>
           </div>
         );
       })}
@@ -610,6 +642,68 @@ function Overlay({ ov, cat }) {
         )}
       </motion.div>
     </motion.div>
+  );
+}
+
+
+function ChatBox({ rs, me }) {
+  const [text, setText] = useState('');
+  const [open, setOpen] = useState(false);
+  const [msgs, setMsgs] = useState(rs.chat || []);
+  const endRef = useRef(null);
+  const emojis = ['🔥', '😂', '👏', '💰', '🏏', '😱', '❤️', '👍', '🎯', '🚀'];
+  useEffect(() => {
+    setMsgs(rs.chat || []);
+  }, [rs.chat]);
+  useEffect(() => {
+    const onChat = list => setMsgs(list || []);
+    socket.on('chat', onChat);
+    return () => socket.off('chat', onChat);
+  }, []);
+  useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [msgs, open]);
+  const send = (extra = {}) => {
+    const payload = { text: extra.text ?? text, gif: extra.gif || '' };
+    if (!payload.text && !payload.gif) return;
+    socket.emit('chat', payload, r => { if (r && !r.ok) return; setText(''); });
+  };
+  const gifs = [
+    'https://media.giphy.com/media/3o7aCTPPm4OHfRLSH6/giphy.gif',
+    'https://media.giphy.com/media/l0MYt5jPR6QX5pnqM/giphy.gif',
+    'https://media.giphy.com/media/26u4cqiYI30juCOGY/giphy.gif',
+    'https://media.giphy.com/media/xT0xeJpnrWC4XWblEk/giphy.gif',
+  ];
+  return (
+    <div className={`chat-wrap ${open ? 'open' : ''}`}>
+      <button type="button" className="chat-fab btn" onClick={() => setOpen(o => !o)}>{open ? '✕' : '💬 Chat'}</button>
+      {open && (
+        <div className="chat-panel card">
+          <div className="chat-msgs">
+            {(msgs || []).map(m => (
+              <div key={m.id} className={`chat-line ${m.name === me?.name ? 'mine' : ''}`}>
+                <b>{m.name}{m.team ? ` (${m.team})` : ''}</b>
+                {m.text && <div>{m.text}</div>}
+                {m.gif && <img src={m.gif} alt="gif" className="chat-gif" />}
+              </div>
+            ))}
+            <div ref={endRef} />
+          </div>
+          <div className="chat-emojis">
+            {emojis.map(e => <button type="button" key={e} onClick={() => send({ text: e })}>{e}</button>)}
+          </div>
+          <div className="chat-gifs">
+            {gifs.map((g, i) => (
+              <button type="button" key={i} className="gif-btn" onClick={() => send({ gif: g })}>
+                <img src={g} alt="" />
+              </button>
+            ))}
+          </div>
+          <div className="row" style={{ flexWrap: 'nowrap' }}>
+            <input value={text} maxLength={300} placeholder="Message…" onChange={e => setText(e.target.value)} onKeyDown={e => e.key === 'Enter' && send()} />
+            <button type="button" className="btn sec" onClick={() => send()}>Send</button>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -681,7 +775,7 @@ function App() {
         {rs.phase === 'lobby' && <Lobby {...common} />}
         {rs.phase === 'retention' && <Retention {...common} />}
         {rs.phase === 'auction' && rs.cur && <Auction {...common} left={left} />}
-        {rs.phase === 'end' && <End rs={rs} cat={cat} />}
+        {rs.phase === 'end' && <End rs={rs} cat={cat} me={me} act={act} />}
       </div>
     );
   }
@@ -689,6 +783,7 @@ function App() {
     <>
       {body}
       <AnimatePresence>{ov && cat && <Overlay key={ov.k} ov={ov} cat={cat} />}</AnimatePresence>
+      {rs && me && <ChatBox rs={rs} me={me} />}
       {toast && <div className="toast">{toast}</div>}
     </>
   );
