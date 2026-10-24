@@ -1,0 +1,35 @@
+NATIONALITY MISMATCH: Akash Madhwal is "India" on iplt20.com but "UC" in squads.txt
+cs name not found for Wanindu Hasaranga: PW Hasaranga
+DUPLICATE stats match: Mayank Yadav and Mangesh Yadav both matched "MP Yadav". Stats left blank. Add |cs=<exact name> to the right one.
+DUPLICATE stats match: Ashwani Kumar and Amit Kumar both matched "Ashwani Kumar". Stats left blank. Add |cs=<exact name> to the right one.
+CAPPED GUESS: Macneil Noronha -> uncapped (no match in Cricsheet). Add |U or |C in squads.txt if wrong.
+CAPPED GUESS: Dian Forrester -> capped (no match in Cricsheet). Add |U or |C in squads.txt if wrong.
+CAPPED GUESS: Zak Foulkes -> capped (no match in Cricsheet). Add |U or |C in squads.txt if wrong.
+CAPPED GUESS: Ben Duckett -> capped (no match in Cricsheet). Add |U or |C in squads.txt if wrong.
+CAPPED GUESS: David Miller -> capped (no match in Cricsheet). Add |U or |C in squads.txt if wrong.
+CAPPED GUESS: Dushmantha Chameera -> capped (no match in Cricsheet). Add |U or |C in squads.txt if wrong.
+CAPPED GUESS: Auqib Nabi Dar -> uncapped (no match in Cricsheet). Add |U or |C in squads.txt if wrong.
+CAPPED GUESS: Ajay Mandal -> uncapped (no match in Cricsheet). Add |U or |C in squads.txt if wrong.
+CAPPED GUESS: Shahrukh Khan -> uncapped (no match in Cricsheet). Add |U or |C in squads.txt if wrong.
+CAPPED GUESS: Yarra Prithviraj -> uncapped (no match in Cricsheet). Add |U or |C in squads.txt if wrong.
+CAPPED GUESS: Sai Kishore -> uncapped (no match in Cricsheet). Add |U or |C in squads.txt if wrong.
+CAPPED GUESS: Connor Esterhuizen -> capped (no match in Cricsheet). Add |U or |C in squads.txt if wrong.
+CAPPED GUESS: Daksh Kamra -> uncapped (no match in Cricsheet). Add |U or |C in squads.txt if wrong.
+CAPPED GUESS: Rovman Powell -> capped (no match in Cricsheet). Add |U or |C in squads.txt if wrong.
+CAPPED GUESS: Sarthak Ranjan -> uncapped (no match in Cricsheet). Add |U or |C in squads.txt if wrong.
+CAPPED GUESS: Ruchit Ahir -> uncapped (no match in Cricsheet). Add |U or |C in squads.txt if wrong.
+CAPPED GUESS: Mohammed Izhar -> uncapped (no match in Cricsheet). Add |U or |C in squads.txt if wrong.
+CAPPED GUESS: Pyla Avinash -> uncapped (no match in Cricsheet). Add |U or |C in squads.txt if wrong.
+CAPPED GUESS: Vishal Nishad -> uncapped (no match in Cricsheet). Add |U or |C in squads.txt if wrong.
+CAPPED GUESS: Aman Rao -> uncapped (no match in Cricsheet). Add |U or |C in squads.txt if wrong.
+CAPPED GUESS: Emanjot Singh Chahal -> uncapped (no match in Cricsheet). Add |U or |C in squads.txt if wrong.
+CAPPED GUESS: Yudhvir Singh Charak -> uncapped (no match in Cricsheet). Add |U or |C in squads.txt if wrong.
+CAPPED GUESS: Vihaan Malhotra -> uncapped (no match in Cricsheet). Add |U or |C in squads.txt if wrong.
+CAPPED GUESS: Kanishk Chouhan -> uncapped (no match in Cricsheet). Add |U or |C in squads.txt if wrong.
+CAPPED GUESS: Satvik Deswal -> uncapped (no match in Cricsheet). Add |U or |C in squads.txt if wrong.
+CAPPED GUESS: Vicky Ostwal -> uncapped (no match in Cricsheet). Add |U or |C in squads.txt if wrong.
+CAPPED GUESS: Mangesh Yadav -> uncapped (no match in Cricsheet). Add |U or |C in squads.txt if wrong.
+CAPPED GUESS: RS Ambrish -> uncapped (no match in Cricsheet). Add |U or |C in squads.txt if wrong.
+CAPPED GUESS: Krains Fuletra -> uncapped (no match in Cricsheet). Add |U or |C in squads.txt if wrong.
+CAPPED GUESS: Amit Kumar -> uncapped (no match in Cricsheet). Add |U or |C in squads.txt if wrong.
+CAPPED GUESS: Onkar Tarmale -> uncapped (no match in Cricsheet). Add |U or |C in squads.txt if wrong.
