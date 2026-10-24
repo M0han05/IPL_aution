@@ -15,7 +15,8 @@ const makeId = () => {
 const cid = localStorage.cid || (localStorage.cid = makeId());
 const COL = { CSK: '#e0a800', MI: '#0a58b5', RCB: '#c8102e', KKR: '#5b2d91', RR: '#ea1a85', DC: '#1f7fd1', SRH: '#f26522', LSG: '#0f8fb3', GT: '#1c4a6e', PBKS: '#c4163c' };
 const ROLE = { BAT: 'Batter', WK: 'Wicketkeeper', AR: 'All-rounder', BOWL: 'Bowler' };
-const SLAB = [2000, 1800, 1800, 1800, 1800], UNC = 400;
+// 4 retentions max: 1st capped 2000L (₹20 Cr), next 3 capped 1800L (₹18 Cr) each; uncapped 400L (₹4 Cr)
+const SLAB = [2000, 1800, 1800, 1800], UNC = 400;
 const cr = l => (l >= 100 ? `₹${+(l / 100).toFixed(2)} Cr` : `₹${l} L`);
 const inc = b => (b < 100 ? 5 : b < 200 ? 10 : b < 500 ? 20 : 25);
 const osCount = (t, P) => t.squad.filter(x => P[x.id].os).length;
@@ -74,7 +75,7 @@ function Home({ join, flash }) {
         <ol className="home-steps">
           <li><b>Create</b> a room (you become host) or <b>Join</b> with a 5-letter code.</li>
           <li>Each person picks one <b>franchise</b>. Host can start even with 1 team.</li>
-          <li><b>Retention</b> (Mega): keep up to 5 core players; each team has 4 RTM cards.</li>
+          <li><b>Retention</b> (Mega): keep up to 4 core players; up to 4 RTM cards (retentions decrease RTM cards).</li>
           <li><b>Auction</b>: bid live. Max <b>8 overseas</b>, squad <b>18–25</b> players.</li>
           <li>Host can <b>Pause / Continue</b>. After the end, <b>Analyse &amp; rank</b> squads.</li>
         </ol>
@@ -82,12 +83,14 @@ function Home({ join, flash }) {
           <span className="chip p">Mega ₹130 Cr</span>
           <span className="chip p">Mini ₹75 Cr</span>
           <span className="chip">Max ₹25 Cr / player</span>
-          <span className="chip">4 RTM cards</span>
+          <span className="chip">Up to 4 RTM cards</span>
+          <span className="chip">Max 4 Retentions</span>
           <span className="chip">Squad 18–25 · 8 OS</span>
         </div>
         <div className="mu" style={{ marginTop: 12, fontSize: 13, lineHeight: 1.5 }}>
           <b style={{ color: 'var(--tx)' }}>Bidding rules:</b> increments rise with price. No player can be bought above <b style={{ color: 'var(--tx)' }}>₹25 Cr</b>.
-          Mega retentions: 1st capped <b style={{ color: 'var(--tx)' }}>₹20 Cr</b>, next capped <b style={{ color: 'var(--tx)' }}>₹18 Cr</b> each (max 5). Uncapped ₹4 Cr. Each team gets <b style={{ color: 'var(--tx)' }}>4 RTM</b> cards.
+          Mega retentions: up to 4 players (1st capped <b style={{ color: 'var(--tx)' }}>₹20 Cr</b>, next 3 capped <b style={{ color: 'var(--tx)' }}>₹18 Cr</b> each). Uncapped ₹4 Cr.
+          Total 4 cards: retention count + RTM cards = 4. RTM buys at the final winning bid price.
           After auction, pick a <b style={{ color: 'var(--tx)' }}>playing XI (11)</b> for ranking (all-rounders can bowl in the analysis).
         </div>
       </div>
@@ -124,7 +127,7 @@ function Lobby({ rs, cat, me, act, host }) {
           {host && <div className="seg">{['mega', 'mini'].map(m => <button key={m} className={rs.mode === m ? 'on' : ''} onClick={() => act('mode', m)}>{m === 'mega' ? 'Mega' : 'Mini'}</button>)}</div>}
         </div>
       </div>
-      <div className="mu">{rs.mode === 'mega' ? 'Mega: ₹130 Cr purse, up to 5 retentions (1st ₹20 Cr, next ₹18 Cr), 4 RTM cards.' : 'Mini: ₹75 Cr purse, keep any players free, no RTM.'}</div>
+      <div className="mu">{rs.mode === 'mega' ? 'Mega: ₹130 Cr purse, up to 4 retentions (1st ₹20 Cr, next 3 ₹18 Cr each), up to 4 RTM cards (4 minus retentions).' : 'Mini: ₹75 Cr purse, keep any players free, no RTM.'}</div>
       <div className="teams">
         {Object.entries(cat.teams).map(([c, nme]) => {
           const m = taken[c], mine = m && m.cid === cid;
@@ -187,7 +190,9 @@ function Retention({ rs, cat, me, act, host }) {
   const nc = ps.filter(p => p.capped).length, nu = ps.length - nc;
   const cost = t ? t.cost : 0;
   const allReady = Object.values(rs.teams).every(x => x.ready);
-  const blocked = p => !sel.includes(p.id) && mega && (ps.length >= 5 || (p.capped ? nc >= 5 : nu >= 2));
+  // Max 4 retentions allowed total (max 4 capped, max 2 uncapped)
+  const blocked = p => !sel.includes(p.id) && mega && (ps.length >= 4 || (p.capped ? nc >= 4 : nu >= 2));
+  // 1st capped ₹20 Cr, next 3 capped ₹18 Cr each; uncapped ₹4 Cr
   const price = p => { const i = sel.indexOf(p.id); if (i < 0 || !mega) return ''; return cr(p.capped ? SLAB[ps.filter(x => x.capped).indexOf(p)] : UNC); };
   const toggle = p => { if (t.ready) return; act('ret', sel.includes(p.id) ? sel.filter(i => i !== p.id) : [...sel, p.id]); };
   return (
@@ -198,15 +203,15 @@ function Retention({ rs, cat, me, act, host }) {
             <div>
               <div className="chip p">{mega ? 'MEGA AUCTION' : 'MINI AUCTION'}</div>
               <h1>Build your <em>core squad</em></h1>
-              <div className="mu">{mega ? 'Retain up to 5 players. Capped: 1st ₹20 Cr, then ₹18 Cr each. Uncapped ₹4 Cr. 4 RTM cards.' : 'Keep any players for free. Everyone else goes to the pool.'}</div>
+              <div className="mu">{mega ? 'Retain up to 4 players. Capped: 1st ₹20 Cr, then next 3 ₹18 Cr each. Uncapped ₹4 Cr. RTM cards = 4 minus retentions.' : 'Keep any players for free. Everyone else goes to the pool.'}</div>
             </div>
             <div className="card"><div className="mu">REMAINING PURSE</div><b style={{ fontSize: 32, color: 'var(--ok)' }}>{cr(t.purse - cost)}</b></div>
           </div>
           <div className="stat4">
-            <div className="card sc"><div className="mu">TOTAL SLOTS</div><b>{ps.length}</b><span className="mu"> / {mega ? 6 : 25}</span></div>
-            <div className="card sc"><div className="mu">CAPPED</div><b>{nc}</b><span className="mu"> / {mega ? 5 : '-'}</span></div>
+            <div className="card sc"><div className="mu">TOTAL SLOTS</div><b>{ps.length}</b><span className="mu"> / {mega ? 4 : 25}</span></div>
+            <div className="card sc"><div className="mu">CAPPED</div><b>{nc}</b><span className="mu"> / {mega ? 4 : '-'}</span></div>
             <div className="card sc"><div className="mu">UNCAPPED</div><b>{nu}</b><span className="mu"> / {mega ? 2 : '-'}</span></div>
-            <div className="card sc o"><div className="mu">RTM CARDS</div><b>{t.rtm}</b><div className="mu">Available in the auction</div></div>
+            <div className="card sc o"><div className="mu">RTM CARDS</div><b>{t.rtm}</b><div className="mu">{mega ? `${Math.max(0, 4 - ps.length)} left in auction` : 'Mini auction'}</div></div>
           </div>
           <div className="players">
             {roster.length === 0 && <div className="mu">No players from {me.team} in the data file.</div>}
@@ -648,41 +653,93 @@ function Overlay({ ov, cat }) {
 
 function ChatBox({ rs, me }) {
   const [text, setText] = useState('');
+  const [gifPreview, setGifPreview] = useState(null);
   const [open, setOpen] = useState(false);
   const [msgs, setMsgs] = useState(rs.chat || []);
   const endRef = useRef(null);
+  const fileInputRef = useRef(null);
   const emojis = ['🔥', '😂', '👏', '💰', '🏏', '😱', '❤️', '👍', '🎯', '🚀'];
+
   useEffect(() => {
     setMsgs(rs.chat || []);
   }, [rs.chat]);
+
   useEffect(() => {
     const onChat = list => setMsgs(list || []);
     socket.on('chat', onChat);
     return () => socket.off('chat', onChat);
   }, []);
-  useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [msgs, open]);
-  const send = (extra = {}) => {
-    const payload = { text: extra.text ?? text, gif: extra.gif || '' };
-    if (!payload.text && !payload.gif) return;
-    socket.emit('chat', payload, r => { if (r && !r.ok) return; setText(''); });
+
+  useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [msgs, open, gifPreview]);
+
+  const loadMediaFile = file => {
+    if (!file) return;
+    if (file.size > 3 * 1024 * 1024) {
+      alert('GIF/image must be under 3MB');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = e => {
+      if (e.target?.result) setGifPreview(e.target.result);
+    };
+    reader.readAsDataURL(file);
   };
-  const gifs = [
-    'https://media.giphy.com/media/3o7aCTPPm4OHfRLSH6/giphy.gif',
-    'https://media.giphy.com/media/l0MYt5jPR6QX5pnqM/giphy.gif',
-    'https://media.giphy.com/media/26u4cqiYI30juCOGY/giphy.gif',
-    'https://media.giphy.com/media/xT0xeJpnrWC4XWblEk/giphy.gif',
-  ];
+
+  // Capture GIFs / images pasted directly from mobile keyboard (Gboard, Samsung, iOS) or clipboard
+  const handlePaste = e => {
+    const items = e.clipboardData?.items;
+    if (items && items.length) {
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        if (item.type.startsWith('image/')) {
+          const file = item.getAsFile();
+          if (file) {
+            loadMediaFile(file);
+            e.preventDefault();
+            return;
+          }
+        }
+      }
+    }
+    const pasteTxt = (e.clipboardData?.getData('text/plain') || '').trim();
+    if (/^https?:\/\/.+\.(gif|webp|png|jpe?g)(\?.*)?$/i.test(pasteTxt) ||
+        /^https?:\/\/(media\.giphy\.com|media\.tenor\.com|c\.tenor\.com)\/.+/i.test(pasteTxt)) {
+      setGifPreview(pasteTxt);
+      e.preventDefault();
+    }
+  };
+
+  const send = (extra = {}) => {
+    let gifToSend = extra.gif || gifPreview || '';
+    let textToSend = (extra.text ?? text).trim();
+    // Auto-detect direct GIF link in text box
+    if (!gifToSend && (/^https?:\/\/.+\.(gif|webp|png|jpe?g)(\?.*)?$/i.test(textToSend) ||
+        /^https?:\/\/(media\.giphy\.com|media\.tenor\.com|c\.tenor\.com)\/.+/i.test(textToSend))) {
+      gifToSend = textToSend;
+      textToSend = '';
+    }
+    if (!textToSend && !gifToSend) return;
+    socket.emit('chat', { text: textToSend, gif: gifToSend }, r => {
+      if (r && !r.ok) {
+        alert(r.error || 'Failed to send message');
+        return;
+      }
+      setText('');
+      setGifPreview(null);
+    });
+  };
+
   return (
     <div className={`chat-wrap ${open ? 'open' : ''}`}>
       <button type="button" className="chat-fab btn" onClick={() => setOpen(o => !o)}>{open ? '✕' : '💬 Chat'}</button>
       {open && (
-        <div className="chat-panel card">
+        <div className="chat-panel card" onPaste={handlePaste}>
           <div className="chat-msgs">
             {(msgs || []).map(m => (
               <div key={m.id} className={`chat-line ${m.name === me?.name ? 'mine' : ''}`}>
                 <b>{m.name}{m.team ? ` (${m.team})` : ''}</b>
                 {m.text && <div>{m.text}</div>}
-                {m.gif && <img src={m.gif} alt="gif" className="chat-gif" />}
+                {m.gif && <img src={m.gif} alt="gif" className="chat-gif" loading="lazy" />}
               </div>
             ))}
             <div ref={endRef} />
@@ -690,16 +747,41 @@ function ChatBox({ rs, me }) {
           <div className="chat-emojis">
             {emojis.map(e => <button type="button" key={e} onClick={() => send({ text: e })}>{e}</button>)}
           </div>
-          <div className="chat-gifs">
-            {gifs.map((g, i) => (
-              <button type="button" key={i} className="gif-btn" onClick={() => send({ gif: g })}>
-                <img src={g} alt="" />
-              </button>
-            ))}
-          </div>
-          <div className="row" style={{ flexWrap: 'nowrap' }}>
-            <input value={text} maxLength={300} placeholder="Message…" onChange={e => setText(e.target.value)} onKeyDown={e => e.key === 'Enter' && send()} />
-            <button type="button" className="btn sec" onClick={() => send()}>Send</button>
+          {gifPreview && (
+            <div className="chat-preview">
+              <img src={gifPreview} alt="preview" />
+              <button type="button" onClick={() => setGifPreview(null)} title="Remove GIF">✕</button>
+            </div>
+          )}
+          <div className="row chat-actions" style={{ flexWrap: 'nowrap' }}>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/gif,image/webp,image/png,image/jpeg"
+              style={{ display: 'none' }}
+              onChange={e => {
+                const f = e.target.files?.[0];
+                if (f) loadMediaFile(f);
+                e.target.value = '';
+              }}
+            />
+            <button
+              type="button"
+              className="chat-gif-btn"
+              title="Add GIF from mobile keyboard or device"
+              onClick={() => fileInputRef.current?.click()}
+            >
+              GIF 🖼️
+            </button>
+            <input
+              value={text}
+              maxLength={300}
+              placeholder="Message or paste GIF…"
+              onPaste={handlePaste}
+              onChange={e => setText(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && send()}
+            />
+            <button type="button" className="btn sec" style={{ flexShrink: 0 }} onClick={() => send()}>Send</button>
           </div>
         </div>
       )}
@@ -743,7 +825,6 @@ function App() {
     if (socket.connected) rejoin();
     const t = setInterval(() => tick(x => x + 1), 200);
     const onPop = () => {
-      // Browser back → home (leave room UI; can rejoin with code)
       sessionStorage.removeItem('code');
       setRs(null);
     };

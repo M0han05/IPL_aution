@@ -11,7 +11,8 @@ const DATA = path.join(ROOT, 'data');
 const TEAMS = { CSK: 'Chennai Super Kings', MI: 'Mumbai Indians', RCB: 'Royal Challengers Bengaluru', KKR: 'Kolkata Knight Riders', RR: 'Rajasthan Royals', DC: 'Delhi Capitals', SRH: 'Sunrisers Hyderabad', LSG: 'Lucknow Super Giants', GT: 'Gujarat Titans', PBKS: 'Punjab Kings' };
 
 /* ---------- rules (amounts in lakh) ---------- */
-const MEGA = { purse: 13000, slab: [2000, 1800, 1800, 1800, 1800], unc: 400, max: 5, maxCap: 5, maxUnc: 2, rtmMax: 4 };
+// 4 players max retention; 1st capped 2000L (₹20 Cr), next 3 capped 1800L (₹18 Cr) each; uncapped 400L (₹4 Cr); 4 RTM cards minus retentions
+const MEGA = { purse: 13000, slab: [2000, 1800, 1800, 1800], unc: 400, max: 4, maxCap: 4, maxUnc: 2, rtmMax: 4 };
 const MAX_PLAYER_PRICE = 2500; // ₹25 Cr ceiling on any single buy
 const MINI = { purse: 7500 };
 const MAXSQ = 25, MINSQ = 18, MAXOS = 8;
@@ -62,7 +63,7 @@ function checkRet(r, team, ids) {
   if (ps.filter(p => p.os).length > MAXOS) return 'Maximum 8 overseas players';
   if (r.mode === 'mini') return ps.length > MAXSQ ? 'Squad limit is 25' : { cost: 0 };
   const cap = ps.filter(p => p.capped).length, unc = ps.length - cap;
-  if (ps.length > MEGA.max || cap > MEGA.maxCap || unc > MEGA.maxUnc) return 'Retention limit exceeded (5 total, 5 capped, 2 uncapped)';
+  if (ps.length > MEGA.max || cap > MEGA.maxCap || unc > MEGA.maxUnc) return 'Retention limit exceeded (max 4 total, 4 capped, 2 uncapped)';
   return { cost: ps.reduce((s, p) => s + retCost(ps, p), 0) };
 }
 
@@ -77,12 +78,12 @@ function startAuction(r) {
     const ps = t.retained.map(i => PL[i]);
     t.squad = ps.map(p => ({ id: p.id, price: r.mode === 'mega' ? retCost(ps, p) : 0, ret: 1 }));
     t.purse -= t.cost;
-    t.rtm = r.mode === 'mega' ? MEGA.rtmMax : 0;
+    // RTM cards = 4 minus retained player count
+    t.rtm = r.mode === 'mega' ? Math.max(0, MEGA.rtmMax - t.retained.length) : 0;
     t.retained.forEach(i => kept.add(i));
   }
   const pool = PL.filter(p => !kept.has(p.id));
   const marqueeIds = new Set((r.marquee || []).filter(id => !kept.has(id)));
-  // No auto marquee — only host-selected names open the auction first
 
   const roleOf = p => {
     if (marqueeIds.has(p.id)) return 'MARQUEE';
@@ -117,7 +118,7 @@ function nextLot(r) {
   const mid = new Set(r.marquee || []);
   r.setLabel = mid.has(r.cur.id) ? 'MARQUEE' : (curP?.role === 'WK' || curP?.role === 'BAT') ? 'BATTERS / WK' : curP?.role === 'AR' ? 'ALL-ROUNDERS' : 'BOWLERS';
   const pl = PL[r.cur.id];
-  r.noBid = !Object.keys(r.teams).some(c => !why(r, c, pl.base, pl)); // nobody is able to bid: skip quickly
+  r.noBid = !Object.keys(r.teams).some(c => !why(r, c, pl.base, pl));
   arm(r, r.noBid ? 400 : (r.bidMs || BID_DEFAULT), () => resolve(r));
   push(r);
 }
@@ -197,7 +198,7 @@ function act(r, cid, type, p) {
       if (r.phase !== 'retention' || !t || t.ready) return 'Not allowed now';
       const e = checkRet(r, m.team, p);
       if (typeof e === 'string') return e;
-      t.retained = p; t.cost = e.cost; t.rtm = r.mode === 'mega' ? MEGA.max - p.length : 0;
+      t.retained = p; t.cost = e.cost; t.rtm = r.mode === 'mega' ? Math.max(0, MEGA.rtmMax - p.length) : 0;
       break;
     }
     case 'ready':
@@ -273,7 +274,6 @@ function act(r, cid, type, p) {
       const set = String(p || '');
       const order = ['MARQUEE', 'BAT_WK', 'AR', 'BOWL'];
       if (!order.includes(set)) return 'Unknown set';
-      // Rebuild remaining list: put chosen set first among remaining players
       const done = new Set();
       for (const t of Object.values(r.teams)) t.squad.forEach(x => done.add(x.id));
       (r.list || []).slice(0, r.i + 1).forEach(id => done.add(id));
@@ -287,12 +287,10 @@ function act(r, cid, type, p) {
         return 'BOWL';
       };
       const remaining = (r.list || []).slice(r.i + (r.sub === 'break' ? 1 : 0)).filter(id => !done.has(id));
-      // if mid-lot, keep current then jump
       const rest = remaining.filter(id => id !== r.cur?.id);
       const buckets = { MARQUEE: [], BAT_WK: [], AR: [], BOWL: [] };
       for (const id of rest) buckets[roleOf(id)].push(id);
       const newList = [];
-      // chosen set first
       newList.push(...shuffle(buckets[set] || []));
       for (const k of order) if (k !== set) newList.push(...shuffle(buckets[k] || []));
       if (r.cur && r.sub === 'bid') {
@@ -322,7 +320,10 @@ function act(r, cid, type, p) {
 /* ---------- server ---------- */
 const app = express();
 const srv = http.createServer(app);
-io = new Server(srv, { cors: { origin: true } });
+io = new Server(srv, {
+  cors: { origin: true },
+  maxHttpBufferSize: 5e6 // 5MB buffer for mobile GIF/image uploads and keyboard paste
+});
 const dist = path.join(ROOT, 'client', 'dist');
 app.use(express.static(dist));
 app.use((q, s) => s.sendFile(path.join(dist, 'index.html'), e => e && s.status(404).send('Run "npm run build" first, or use "npm run dev".')));
@@ -358,10 +359,15 @@ io.on('connection', s => {
   s.on('chat', (msg, ack) => {
     if (!r || !r.members[cid]) return ack?.({ ok: false });
     const text = String(msg?.text || '').trim().slice(0, 300);
-    const gif = String(msg?.gif || '').trim().slice(0, 400);
+    const gif = String(msg?.gif || '').trim();
     if (!text && !gif) return ack?.({ ok: false });
-    // allow http(s) gif urls only
-    if (gif && !/^https:\/\//i.test(gif)) return ack?.({ ok: false, error: 'Invalid gif url' });
+    // allow http(s) image/gif URLs or data:image/ data URIs (from mobile keyboard/device upload)
+    if (gif) {
+      const isUrl = /^https?:\/\/.+/i.test(gif);
+      const isDataUri = /^data:image\/(gif|png|jpeg|jpg|webp);base64,/i.test(gif);
+      if (!isUrl && !isDataUri) return ack?.({ ok: false, error: 'Invalid GIF/image format' });
+      if (gif.length > 4 * 1024 * 1024) return ack?.({ ok: false, error: 'GIF/image too large (max 3MB)' });
+    }
     const m = r.members[cid];
     r.chat = [...(r.chat || []), { id: Date.now() + Math.random(), name: m.name, team: m.team, text, gif, at: Date.now() }].slice(-50);
     io.to(r.code).emit('chat', r.chat);
