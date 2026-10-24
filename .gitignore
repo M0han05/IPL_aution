@@ -1,0 +1,11 @@
+node_modules/
+client/dist/
+data/*.zip
+data/ipl_*.zip
+data/tests*.zip
+data/odis*.zip
+data/t20s*.zip
+.DS_Store
+*.log
+.env
+.env.local
