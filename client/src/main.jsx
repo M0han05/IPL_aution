@@ -160,10 +160,11 @@ function Lobby({ rs, cat, me, act, host }) {
                 ['forceUnsold', 'Force unsold'],
                 ['sets', 'Set-wise order'],
               ].map(([k, label]) => {
-                const on = (rs.opts || {})[k] !== false;
-                const next = { sellNow: rs.opts?.sellNow !== false, markUnsold: rs.opts?.markUnsold !== false, forceUnsold: rs.opts?.forceUnsold !== false, sets: rs.opts?.sets !== false, [k]: !on };
+                const on = (rs.opts || {})[k] !== false && (k === 'sets' ? (rs.opts?.sets !== false) : !!(rs.opts || {})[k]);
+                const next = { sellNow: !!rs.opts?.sellNow, markUnsold: !!rs.opts?.markUnsold, forceUnsold: !!rs.opts?.forceUnsold, sets: rs.opts?.sets !== false, [k]: !on };
+                if (k === 'sets') next.sets = !((rs.opts?.sets) !== false);
                 return (
-                  <button key={k} type="button" className="btn sec" style={{ opacity: on ? 1 : 0.55, borderColor: on ? 'var(--ac)' : undefined }} onClick={() => act('opts', next)}>
+                  <button key={k} className={`btn sec ${on ? '' : ''}`} style={{ opacity: on ? 1 : 0.55, borderColor: on ? 'var(--ac)' : undefined }} onClick={() => act('opts', next)}>
                     {on ? '✓ ' : ''}{label}
                   </button>
                 );
@@ -408,16 +409,6 @@ function Auction({ rs, cat, me, act, host, left }) {
           <div className="row mob-actions" style={{ gap: 6, flexWrap: 'wrap' }}>
             <button className="btn sec" style={{ padding: '6px 10px', fontSize: 12 }} onClick={() => setShowPlayers(true)}>Players list</button>
             <button className="btn sec" style={{ padding: '6px 10px', fontSize: 12 }} onClick={() => setShowTeams(true)}>All teams</button>
-            {host && lead && rs.sub === 'bid' && !rs.paused && (
-              <button
-                type="button"
-                className="btn"
-                style={{ padding: '6px 12px', fontSize: 12, background: 'linear-gradient(90deg, #10b981, #059669)', border: 0, fontWeight: 800 }}
-                onClick={() => act('sellnow')}
-              >
-                ⚡ Sell now ({lead})
-              </button>
-            )}
             {host && (
               <button className="btn" style={{ padding: '6px 12px', fontSize: 12, background: rs.paused ? 'var(--ok)' : undefined }} onClick={() => act('pause')}>
                 {rs.paused ? '▶ Continue auction' : '⏸ Pause / rest'}
@@ -478,29 +469,11 @@ function Auction({ rs, cat, me, act, host, left }) {
           <div className="mu" style={{ marginTop: 6 }}>If two people bid at once, only the first accepted price wins — others see “Someone just bid”.</div>
         </div>
         {host && (
-          <div className="row host-controls" style={{ flexWrap: 'wrap', gap: 8, marginTop: 12, justifyContent: 'center' }}>
-            <button type="button" className="btn sec" disabled={rs.sub !== 'bid' && rs.sub !== 'rtm'} onClick={() => act('pause')}>
-              {rs.paused ? '▶ Resume' : '⏸ Pause'}
-            </button>
-            <button
-              type="button"
-              className="btn"
-              style={{
-                background: lead && rs.sub === 'bid' && !rs.paused ? 'linear-gradient(90deg, #10b981, #059669)' : undefined,
-                fontWeight: 800,
-                boxShadow: lead ? '0 4px 14px rgba(16,185,129,0.4)' : undefined,
-              }}
-              disabled={!(rs.sub === 'bid' && lead && !rs.paused)}
-              onClick={() => act('sellnow')}
-            >
-              ⚡ Sell now {lead ? `to ${lead} (${cr(c.bid)})` : ''}
-            </button>
-            <button type="button" className="btn sec" disabled={!(rs.sub === 'bid' && !lead && !rs.paused)} onClick={() => act('skip')}>
-              Mark unsold
-            </button>
-            <button type="button" className="btn sec" style={{ color: '#ff5a6a' }} disabled={!(rs.sub === 'bid' && !rs.paused)} onClick={() => act('forceUnsold')}>
-              Force unsold
-            </button>
+          <div className="row" style={{ flexWrap: 'wrap' }}>
+            <button className="btn sec" disabled={rs.sub !== 'bid' && rs.sub !== 'rtm'} onClick={() => act('pause')}>{rs.paused ? 'Resume' : 'Pause'}</button>
+            {rs.opts?.sellNow && <button className="btn sec" disabled={!(rs.sub === 'bid' && lead && !rs.paused)} onClick={() => act('sellnow')}>Sell now</button>}
+            {rs.opts?.markUnsold && <button className="btn sec" disabled={!(rs.sub === 'bid' && !lead && !rs.paused)} onClick={() => act('skip')}>Mark unsold</button>}
+            {rs.opts?.forceUnsold && <button className="btn sec" disabled={!(rs.sub === 'bid' && !rs.paused)} onClick={() => act('forceUnsold')}>Force unsold</button>}
           </div>
         )}
         {host && (
