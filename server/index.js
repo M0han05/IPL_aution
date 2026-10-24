@@ -43,7 +43,7 @@ function view(r) {
   const left = !live ? 0 : r.paused ? r.left : Math.max(0, r.endsAt - Date.now());
   return {
     code: r.code, mode: r.mode, phase: r.phase, sub: r.sub, host: r.host, paused: !!r.paused, left, bidMs: r.bidMs || BID_DEFAULT,
-    opts: r.opts || { sellNow: false, markUnsold: false, forceUnsold: false, sets: true },
+    opts: r.opts || { sellNow: true, markUnsold: true, forceUnsold: true, sets: true },
     setLabel: r.setLabel || null, marquee: r.marquee || [],
     members: Object.entries(r.members).map(([cid, m]) => ({ cid, name: m.name, team: m.team, online: !!m.sid })),
     teams: r.teams, cur: r.cur, idx: r.i, total: r.list ? r.list.length : 0, acc: !!r.acc, rtmTeam: r.rtmTeam || null, log: r.log || [],
@@ -228,13 +228,13 @@ function act(r, cid, type, p) {
       else { r.paused = false; arm(r, r.left, r.fn); }
       break;
     case 'sellnow':
-      if (!host || !(r.opts?.sellNow) || r.sub !== 'bid' || r.paused || !r.cur.by) return 'Not allowed now';
+      if (!host || r.sub !== 'bid' || r.paused || !r.cur.by) return 'Not allowed now';
       clearTimeout(r.tmr); resolve(r); break;
     case 'skip':
-      if (!host || !(r.opts?.markUnsold) || r.sub !== 'bid' || r.paused || r.cur.by) return 'Not allowed now';
+      if (!host || r.sub !== 'bid' || r.paused || r.cur.by) return 'Not allowed now';
       clearTimeout(r.tmr); resolve(r); break;
     case 'forceUnsold':
-      if (!host || !(r.opts?.forceUnsold) || r.sub !== 'bid' || r.paused) return 'Not allowed now';
+      if (!host || r.sub !== 'bid' || r.paused) return 'Not allowed now';
       clearTimeout(r.tmr);
       r.cur.by = null; r.cur.bid = 0;
       resolve(r); break;
@@ -336,7 +336,7 @@ io.on('connection', s => {
       const id = String(d?.cid || '');
       if (!name || id.length < 8) return ack?.({ ok: false, error: 'Enter your name' });
       let room;
-      if (d.create) { const code = mkCode(); room = { code, host: id, mode: 'mega', phase: 'lobby', members: {}, teams: {}, bidMs: BID_DEFAULT, opts: { sellNow: false, markUnsold: false, forceUnsold: false, sets: true }, marquee: [], chat: [], setOrder: ['MARQUEE', 'BAT_WK', 'AR', 'BOWL'] }; rooms.set(code, room); }
+      if (d.create) { const code = mkCode(); room = { code, host: id, mode: 'mega', phase: 'lobby', members: {}, teams: {}, bidMs: BID_DEFAULT, opts: { sellNow: true, markUnsold: true, forceUnsold: true, sets: true }, marquee: [], chat: [], setOrder: ['MARQUEE', 'BAT_WK', 'AR', 'BOWL'] }; rooms.set(code, room); }
       else { room = rooms.get(String(d.code || '').toUpperCase().trim()); if (!room) return ack?.({ ok: false, error: 'Room not found' }); }
       if (!room.members[id] && Object.keys(room.members).length >= 30) return ack?.({ ok: false, error: 'Room is full' });
       r = room; cid = id;
