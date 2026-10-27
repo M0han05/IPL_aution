@@ -11,7 +11,6 @@ const DATA = path.join(ROOT, 'data');
 const TEAMS = { CSK: 'Chennai Super Kings', MI: 'Mumbai Indians', RCB: 'Royal Challengers Bengaluru', KKR: 'Kolkata Knight Riders', RR: 'Rajasthan Royals', DC: 'Delhi Capitals', SRH: 'Sunrisers Hyderabad', LSG: 'Lucknow Super Giants', GT: 'Gujarat Titans', PBKS: 'Punjab Kings' };
 
 /* ---------- rules (amounts in lakh) ---------- */
-// 4 players max retention; 1st capped 2000L (₹20 Cr), next 3 capped 1800L (₹18 Cr) each; uncapped 400L (₹4 Cr); 4 RTM cards minus retentions
 const MEGA = { purse: 13000, slab: [2000, 1800, 1800, 1800], unc: 400, max: 4, maxCap: 4, maxUnc: 2, rtmMax: 4 };
 const MAX_PLAYER_PRICE = 2500; // ₹25 Cr ceiling on any single buy
 const MINI = { purse: 7500 };
@@ -47,7 +46,7 @@ function view(r) {
     setLabel: r.setLabel || null, marquee: r.marquee || [],
     members: Object.entries(r.members).map(([cid, m]) => ({ cid, name: m.name, team: m.team, online: !!m.sid })),
     teams: r.teams, cur: r.cur, idx: r.i, total: r.list ? r.list.length : 0, acc: !!r.acc, rtmTeam: r.rtmTeam || null, log: r.log || [],
-    chat: (r.chat || []).slice(-40), setOrder: r.setOrder || null,
+    chat: (r.chat || []).slice(-40), setOrder: r.setOrder || null, retMax: r.retMax ?? 4,
   };
 }
 let io;
@@ -63,7 +62,9 @@ function checkRet(r, team, ids) {
   if (ps.filter(p => p.os).length > MAXOS) return 'Maximum 8 overseas players';
   if (r.mode === 'mini') return ps.length > MAXSQ ? 'Squad limit is 25' : { cost: 0 };
   const cap = ps.filter(p => p.capped).length, unc = ps.length - cap;
-  if (ps.length > MEGA.max || cap > MEGA.maxCap || unc > MEGA.maxUnc) return 'Retention limit exceeded (max 4 total, 4 capped, 2 uncapped)';
+  const maxR = r.retMax != null ? r.retMax : MEGA.max;
+  if (maxR === 0) return 'Retentions are disabled in this room';
+  if (ps.length > maxR || cap > maxR || unc > MEGA.maxUnc) return 'Retention limit exceeded';
   return { cost: ps.reduce((s, p) => s + retCost(ps, p), 0) };
 }
 
@@ -78,12 +79,12 @@ function startAuction(r) {
     const ps = t.retained.map(i => PL[i]);
     t.squad = ps.map(p => ({ id: p.id, price: r.mode === 'mega' ? retCost(ps, p) : 0, ret: 1 }));
     t.purse -= t.cost;
-    // RTM cards = 4 minus retained player count
-    t.rtm = r.mode === 'mega' ? Math.max(0, MEGA.rtmMax - t.retained.length) : 0;
+    t.rtm = r.mode === 'mega' ? Math.max(0, (r.retMax ?? MEGA.rtmMax) === 0 ? 0 : MEGA.rtmMax - ps.length) : 0;
     t.retained.forEach(i => kept.add(i));
   }
   const pool = PL.filter(p => !kept.has(p.id));
   const marqueeIds = new Set((r.marquee || []).filter(id => !kept.has(id)));
+  // No auto marquee — only host-selected names open the auction first
 
   const roleOf = p => {
     if (marqueeIds.has(p.id)) return 'MARQUEE';
@@ -118,7 +119,7 @@ function nextLot(r) {
   const mid = new Set(r.marquee || []);
   r.setLabel = mid.has(r.cur.id) ? 'MARQUEE' : (curP?.role === 'WK' || curP?.role === 'BAT') ? 'BATTERS / WK' : curP?.role === 'AR' ? 'ALL-ROUNDERS' : 'BOWLERS';
   const pl = PL[r.cur.id];
-  r.noBid = !Object.keys(r.teams).some(c => !why(r, c, pl.base, pl));
+  r.noBid = !Object.keys(r.teams).some(c => !why(r, c, pl.base, pl)); // nobody is able to bid: skip quickly
   arm(r, r.noBid ? 400 : (r.bidMs || BID_DEFAULT), () => resolve(r));
   push(r);
 }
@@ -191,7 +192,12 @@ function act(r, cid, type, p) {
       const cl = claimed(r);
       if (cl.length < 1) return 'At least 1 team is needed';
       r.phase = 'retention'; r.teams = {}; r.bidMs = r.bidMs || BID_DEFAULT;
-      cl.forEach(c => (r.teams[c] = { purse: r.mode === 'mega' ? MEGA.purse : MINI.purse, squad: [], rtm: r.mode === 'mega' ? MEGA.rtmMax : 0, ready: false, retained: [], cost: 0, xi: [] }));
+      const skipRet = r.mode === 'mini' || (r.retMax === 0);
+      cl.forEach(c => (r.teams[c] = { purse: r.mode === 'mega' ? MEGA.purse : MINI.purse, squad: [], rtm: r.mode === 'mega' ? MEGA.rtmMax : 0, ready: !!skipRet, retained: [], cost: 0, xi: [] }));
+      if (skipRet && r.mode === 'mega') {
+        // 0 retentions → full 4 RTM
+        Object.values(r.teams).forEach(t => { t.rtm = MEGA.rtmMax; });
+      }
       break;
     }
     case 'ret': {
@@ -238,21 +244,28 @@ function act(r, cid, type, p) {
       clearTimeout(r.tmr);
       r.cur.by = null; r.cur.bid = 0;
       resolve(r); break;
-    case 'timer': {
-      if (!host || r.phase !== 'lobby') return 'Only the host can set timer in lobby';
-      const ms = TIMER_OPTS[p];
-      if (!ms) return 'Timer must be 5, 10, 12 or 15 seconds';
-      r.bidMs = ms;
-      break;
-    }
     case 'opts': {
-      if (!host || (r.phase !== 'lobby' && r.phase !== 'retention')) return 'Only host can change options before auction';
+      if (!host || (r.phase !== 'lobby' && r.phase !== 'retention' && r.phase !== 'auction')) return 'Only host can change options';
       r.opts = {
         sellNow: !!p.sellNow,
         markUnsold: !!p.markUnsold,
         forceUnsold: !!p.forceUnsold,
         sets: p.sets !== false,
       };
+      break;
+    }
+    case 'retMax': {
+      if (!host || r.phase !== 'lobby') return 'Set retentions in lobby';
+      const n = Number(p);
+      if (![0, 2, 4].includes(n)) return 'Retentions must be 0, 2 or 4';
+      r.retMax = n;
+      break;
+    }
+    case 'timer': {
+      if (!host || (r.phase !== 'lobby' && r.phase !== 'auction' && r.phase !== 'retention')) return 'Only host can set timer';
+      const ms = TIMER_OPTS[p];
+      if (!ms) return 'Timer must be 5, 10, 12 or 15 seconds';
+      r.bidMs = ms;
       break;
     }
     case 'marquee': {
@@ -263,8 +276,6 @@ function act(r, cid, type, p) {
     }
     case 'endAuction': {
       if (!host || r.phase !== 'auction') return 'Only host can end auction';
-      const all18 = Object.values(r.teams).every(t => t.squad.length >= MINSQ);
-      if (!all18) return 'Every team must have at least 18 players before you can end';
       clearTimeout(r.tmr);
       endAuction(r);
       break;
@@ -274,6 +285,7 @@ function act(r, cid, type, p) {
       const set = String(p || '');
       const order = ['MARQUEE', 'BAT_WK', 'AR', 'BOWL'];
       if (!order.includes(set)) return 'Unknown set';
+      // Rebuild remaining list: put chosen set first among remaining players
       const done = new Set();
       for (const t of Object.values(r.teams)) t.squad.forEach(x => done.add(x.id));
       (r.list || []).slice(0, r.i + 1).forEach(id => done.add(id));
@@ -287,10 +299,12 @@ function act(r, cid, type, p) {
         return 'BOWL';
       };
       const remaining = (r.list || []).slice(r.i + (r.sub === 'break' ? 1 : 0)).filter(id => !done.has(id));
+      // if mid-lot, keep current then jump
       const rest = remaining.filter(id => id !== r.cur?.id);
       const buckets = { MARQUEE: [], BAT_WK: [], AR: [], BOWL: [] };
       for (const id of rest) buckets[roleOf(id)].push(id);
       const newList = [];
+      // chosen set first
       newList.push(...shuffle(buckets[set] || []));
       for (const k of order) if (k !== set) newList.push(...shuffle(buckets[k] || []));
       if (r.cur && r.sub === 'bid') {
@@ -320,10 +334,7 @@ function act(r, cid, type, p) {
 /* ---------- server ---------- */
 const app = express();
 const srv = http.createServer(app);
-io = new Server(srv, {
-  cors: { origin: true },
-  maxHttpBufferSize: 5e6 // 5MB buffer for mobile GIF/image uploads and keyboard paste
-});
+io = new Server(srv, { cors: { origin: true } });
 const dist = path.join(ROOT, 'client', 'dist');
 app.use(express.static(dist));
 app.use((q, s) => s.sendFile(path.join(dist, 'index.html'), e => e && s.status(404).send('Run "npm run build" first, or use "npm run dev".')));
@@ -336,7 +347,7 @@ io.on('connection', s => {
       const id = String(d?.cid || '');
       if (!name || id.length < 8) return ack?.({ ok: false, error: 'Enter your name' });
       let room;
-      if (d.create) { const code = mkCode(); room = { code, host: id, mode: 'mega', phase: 'lobby', members: {}, teams: {}, bidMs: BID_DEFAULT, opts: { sellNow: false, markUnsold: false, forceUnsold: false, sets: true }, marquee: [], chat: [], setOrder: ['MARQUEE', 'BAT_WK', 'AR', 'BOWL'] }; rooms.set(code, room); }
+      if (d.create) { const code = mkCode(); room = { code, host: id, mode: 'mega', phase: 'lobby', members: {}, teams: {}, bidMs: BID_DEFAULT, opts: { sellNow: false, markUnsold: false, forceUnsold: false, sets: true }, marquee: [], chat: [], setOrder: ['MARQUEE', 'BAT_WK', 'AR', 'BOWL'], retMax: 4 }; rooms.set(code, room); }
       else { room = rooms.get(String(d.code || '').toUpperCase().trim()); if (!room) return ack?.({ ok: false, error: 'Room not found' }); }
       if (!room.members[id] && Object.keys(room.members).length >= 30) return ack?.({ ok: false, error: 'Room is full' });
       r = room; cid = id;
@@ -359,15 +370,10 @@ io.on('connection', s => {
   s.on('chat', (msg, ack) => {
     if (!r || !r.members[cid]) return ack?.({ ok: false });
     const text = String(msg?.text || '').trim().slice(0, 300);
-    const gif = String(msg?.gif || '').trim();
+    const gif = String(msg?.gif || '').trim().slice(0, 400);
     if (!text && !gif) return ack?.({ ok: false });
-    // allow http(s) image/gif URLs or data:image/ data URIs (from mobile keyboard/device upload)
-    if (gif) {
-      const isUrl = /^https?:\/\/.+/i.test(gif);
-      const isDataUri = /^data:image\/(gif|png|jpeg|jpg|webp);base64,/i.test(gif);
-      if (!isUrl && !isDataUri) return ack?.({ ok: false, error: 'Invalid GIF/image format' });
-      if (gif.length > 4 * 1024 * 1024) return ack?.({ ok: false, error: 'GIF/image too large (max 3MB)' });
-    }
+    // allow http(s) gif urls only
+    if (gif && !/^https:\/\//i.test(gif)) return ack?.({ ok: false, error: 'Invalid gif url' });
     const m = r.members[cid];
     r.chat = [...(r.chat || []), { id: Date.now() + Math.random(), name: m.name, team: m.team, text, gif, at: Date.now() }].slice(-50);
     io.to(r.code).emit('chat', r.chat);

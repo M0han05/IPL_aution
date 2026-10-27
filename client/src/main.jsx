@@ -15,11 +15,24 @@ const makeId = () => {
 const cid = localStorage.cid || (localStorage.cid = makeId());
 const COL = { CSK: '#e0a800', MI: '#0a58b5', RCB: '#c8102e', KKR: '#5b2d91', RR: '#ea1a85', DC: '#1f7fd1', SRH: '#f26522', LSG: '#0f8fb3', GT: '#1c4a6e', PBKS: '#c4163c' };
 const ROLE = { BAT: 'Batter', WK: 'Wicketkeeper', AR: 'All-rounder', BOWL: 'Bowler' };
-// 4 retentions max: 1st capped 2000L (₹20 Cr), next 3 capped 1800L (₹18 Cr) each; uncapped 400L (₹4 Cr)
 const SLAB = [2000, 1800, 1800, 1800], UNC = 400;
 const cr = l => (l >= 100 ? `₹${+(l / 100).toFixed(2)} Cr` : `₹${l} L`);
 const inc = b => (b < 100 ? 5 : b < 200 ? 10 : b < 500 ? 20 : 25);
 const osCount = (t, P) => t.squad.filter(x => P[x.id].os).length;
+const playBidSound = () => {
+  try {
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx) return;
+    const ctx = playBidSound._ctx || (playBidSound._ctx = new Ctx());
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = 'sine'; o.frequency.value = 880;
+    g.gain.value = 0.08;
+    o.connect(g); g.connect(ctx.destination);
+    o.start();
+    g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15);
+    o.stop(ctx.currentTime + 0.16);
+  } catch {}
+};
 
 function Logo({ code, s = 60 }) {
   const [step, setStep] = useState(0); // 0=png, 1=svg, 2=text
@@ -75,7 +88,7 @@ function Home({ join, flash }) {
         <ol className="home-steps">
           <li><b>Create</b> a room (you become host) or <b>Join</b> with a 5-letter code.</li>
           <li>Each person picks one <b>franchise</b>. Host can start even with 1 team.</li>
-          <li><b>Retention</b> (Mega): keep up to 4 core players; up to 4 RTM cards (retentions decrease RTM cards).</li>
+          <li><b>Retention</b> (Mega): up to 4 retentions (host chooses 0 / 2 / 4); RTM = 4 minus retentions used.</li>
           <li><b>Auction</b>: bid live. Max <b>8 overseas</b>, squad <b>18–25</b> players.</li>
           <li>Host can <b>Pause / Continue</b>. After the end, <b>Analyse &amp; rank</b> squads.</li>
         </ol>
@@ -83,14 +96,12 @@ function Home({ join, flash }) {
           <span className="chip p">Mega ₹130 Cr</span>
           <span className="chip p">Mini ₹75 Cr</span>
           <span className="chip">Max ₹25 Cr / player</span>
-          <span className="chip">Up to 4 RTM cards</span>
-          <span className="chip">Max 4 Retentions</span>
+          <span className="chip">4 RTM cards</span>
           <span className="chip">Squad 18–25 · 8 OS</span>
         </div>
         <div className="mu" style={{ marginTop: 12, fontSize: 13, lineHeight: 1.5 }}>
           <b style={{ color: 'var(--tx)' }}>Bidding rules:</b> increments rise with price. No player can be bought above <b style={{ color: 'var(--tx)' }}>₹25 Cr</b>.
-          Mega retentions: up to 4 players (1st capped <b style={{ color: 'var(--tx)' }}>₹20 Cr</b>, next 3 capped <b style={{ color: 'var(--tx)' }}>₹18 Cr</b> each). Uncapped ₹4 Cr.
-          Total 4 cards: retention count + RTM cards = 4. RTM buys at the final winning bid price.
+          Mega: up to <b style={{ color: 'var(--tx)' }}>4 retentions</b> (1st ₹20 Cr, next ₹18 Cr). RTM cards = <b style={{ color: 'var(--tx)' }}>4 − retentions</b>. Max <b style={{ color: 'var(--tx)' }}>₹25 Cr</b> per player.
           After auction, pick a <b style={{ color: 'var(--tx)' }}>playing XI (11)</b> for ranking (all-rounders can bowl in the analysis).
         </div>
       </div>
@@ -127,7 +138,18 @@ function Lobby({ rs, cat, me, act, host }) {
           {host && <div className="seg">{['mega', 'mini'].map(m => <button key={m} className={rs.mode === m ? 'on' : ''} onClick={() => act('mode', m)}>{m === 'mega' ? 'Mega' : 'Mini'}</button>)}</div>}
         </div>
       </div>
-      <div className="mu">{rs.mode === 'mega' ? 'Mega: ₹130 Cr purse, up to 4 retentions (1st ₹20 Cr, next 3 ₹18 Cr each), up to 4 RTM cards (4 minus retentions).' : 'Mini: ₹75 Cr purse, keep any players free, no RTM.'}</div>
+      <div className="mu">{rs.mode === 'mega' ? `Mega: ₹130 Cr · retentions ${rs.retMax ?? 4} (1st ₹20 Cr, next ₹18 Cr) · RTM = 4 − retained` : 'Mini: ₹75 Cr purse, keep any players free, no RTM.'}</div>
+      {host && rs.mode === 'mega' && (
+        <div className="card row" style={{ flexWrap: 'wrap', gap: 10 }}>
+          <div>
+            <div className="mu" style={{ marginBottom: 6 }}>Retentions allowed (host)</div>
+            <div className="seg">{[0, 2, 4].map(n => (
+              <button key={n} className={(rs.retMax ?? 4) === n ? 'on' : ''} onClick={() => act('retMax', n)}>{n === 0 ? 'None' : n}</button>
+            ))}</div>
+          </div>
+          <div className="mu">RTM cards = 4 − number retained. Changing this only applies before auction starts.</div>
+        </div>
+      )}
       <div className="teams">
         {Object.entries(cat.teams).map(([c, nme]) => {
           const m = taken[c], mine = m && m.cid === cid;
@@ -190,9 +212,7 @@ function Retention({ rs, cat, me, act, host }) {
   const nc = ps.filter(p => p.capped).length, nu = ps.length - nc;
   const cost = t ? t.cost : 0;
   const allReady = Object.values(rs.teams).every(x => x.ready);
-  // Max 4 retentions allowed total (max 4 capped, max 2 uncapped)
-  const blocked = p => !sel.includes(p.id) && mega && (ps.length >= 4 || (p.capped ? nc >= 4 : nu >= 2));
-  // 1st capped ₹20 Cr, next 3 capped ₹18 Cr each; uncapped ₹4 Cr
+  const blocked = p => !sel.includes(p.id) && mega && (ps.length >= (rs.retMax ?? 4) || (p.capped ? nc >= (rs.retMax ?? 4) : nu >= 2));
   const price = p => { const i = sel.indexOf(p.id); if (i < 0 || !mega) return ''; return cr(p.capped ? SLAB[ps.filter(x => x.capped).indexOf(p)] : UNC); };
   const toggle = p => { if (t.ready) return; act('ret', sel.includes(p.id) ? sel.filter(i => i !== p.id) : [...sel, p.id]); };
   return (
@@ -203,15 +223,15 @@ function Retention({ rs, cat, me, act, host }) {
             <div>
               <div className="chip p">{mega ? 'MEGA AUCTION' : 'MINI AUCTION'}</div>
               <h1>Build your <em>core squad</em></h1>
-              <div className="mu">{mega ? 'Retain up to 4 players. Capped: 1st ₹20 Cr, then next 3 ₹18 Cr each. Uncapped ₹4 Cr. RTM cards = 4 minus retentions.' : 'Keep any players for free. Everyone else goes to the pool.'}</div>
+              <div className="mu">{mega ? `Retain up to ${rs.retMax ?? 4} players. 1st capped ₹20 Cr, next ₹18 Cr. Uncapped ₹4 Cr. RTM left = 4 − retained.` : 'Keep any players for free. Everyone else goes to the pool.'}</div>
             </div>
             <div className="card"><div className="mu">REMAINING PURSE</div><b style={{ fontSize: 32, color: 'var(--ok)' }}>{cr(t.purse - cost)}</b></div>
           </div>
           <div className="stat4">
-            <div className="card sc"><div className="mu">TOTAL SLOTS</div><b>{ps.length}</b><span className="mu"> / {mega ? 4 : 25}</span></div>
-            <div className="card sc"><div className="mu">CAPPED</div><b>{nc}</b><span className="mu"> / {mega ? 4 : '-'}</span></div>
+            <div className="card sc"><div className="mu">TOTAL SLOTS</div><b>{ps.length}</b><span className="mu"> / {mega ? 6 : 25}</span></div>
+            <div className="card sc"><div className="mu">CAPPED</div><b>{nc}</b><span className="mu"> / {mega ? 5 : '-'}</span></div>
             <div className="card sc"><div className="mu">UNCAPPED</div><b>{nu}</b><span className="mu"> / {mega ? 2 : '-'}</span></div>
-            <div className="card sc o"><div className="mu">RTM CARDS</div><b>{t.rtm}</b><div className="mu">{mega ? `${Math.max(0, 4 - ps.length)} left in auction` : 'Mini auction'}</div></div>
+            <div className="card sc o"><div className="mu">RTM CARDS</div><b>{t.rtm}</b><div className="mu">Available in the auction</div></div>
           </div>
           <div className="players">
             {roster.length === 0 && <div className="mu">No players from {me.team} in the data file.</div>}
@@ -318,7 +338,7 @@ function TeamsBoard({ rs, cat, me }) {
   );
 }
 
-function PlayersBrowser({ cat, onClose, marqueeIds }) {
+function PlayersBrowser({ cat, onClose, marqueeIds, soldIds }) {
   const P = cat.players;
   const hasMarquee = Array.isArray(marqueeIds) && marqueeIds.length > 0;
   const [tab, setTab] = useState(hasMarquee ? 'MARQUEE' : 'BAT');
@@ -331,7 +351,8 @@ function PlayersBrowser({ cat, onClose, marqueeIds }) {
     ['ALL', 'All'],
   ];
   const list = useMemo(() => {
-    let arr = [...P];
+    const sold = new Set(soldIds || []);
+    let arr = P.filter(p => !sold.has(p.id));
     if (tab === 'MARQUEE' && hasMarquee) {
       const set = new Set(marqueeIds);
       arr = arr.filter(p => set.has(p.id));
@@ -340,7 +361,7 @@ function PlayersBrowser({ cat, onClose, marqueeIds }) {
     }
     arr.sort((a, b) => a.name.localeCompare(b.name));
     return arr;
-  }, [P, tab, marqueeIds, hasMarquee]);
+  }, [P, tab, marqueeIds, hasMarquee, soldIds]);
 
   return (
     <div className="sheet" onClick={onClose}>
@@ -402,7 +423,7 @@ function Auction({ rs, cat, me, act, host, left }) {
           </div>
         </div>
       )}
-      {showPlayers && <PlayersBrowser cat={cat} onClose={() => setShowPlayers(false)} marqueeIds={rs.marquee || []} />}
+      {showPlayers && <PlayersBrowser cat={cat} onClose={() => setShowPlayers(false)} marqueeIds={rs.marquee || []} soldIds={Object.values(rs.teams).flatMap(tm => tm.squad.map(x => x.id))} />}
       <div className="card stage">
         <div className="row" style={{ justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
           <div className="mu">Lot {rs.idx + 1}/{rs.total}{rs.acc ? ' · Accel' : ''}{rs.setLabel ? ` · ${rs.setLabel}` : ''}</div>
@@ -416,9 +437,7 @@ function Auction({ rs, cat, me, act, host, left }) {
             )}
             {host && (
               <button className="btn sec" style={{ padding: '6px 10px', fontSize: 11 }} onClick={() => {
-                const all18 = Object.values(rs.teams).every(tm => tm.squad.length >= 18);
-                if (!all18) { alert('Every team needs at least 18 players to end the auction'); return; }
-                act('endAuction');
+                if (confirm('End the auction now for everyone?')) act('endAuction');
               }}>End auction</button>
             )}
           </div>
@@ -464,6 +483,7 @@ function Auction({ rs, cat, me, act, host, left }) {
         )}
         <div style={{ margin: '12px 0' }}>
           <button className="btn big" disabled={!!why || rs.sub !== 'bid'} onClick={() => {
+            playBidSound();
             act('bid', price);
           }}>{why || `BID ${cr(price)}`}</button>
           <div className="mu" style={{ marginTop: 6 }}>If two people bid at once, only the first accepted price wins — others see “Someone just bid”.</div>
@@ -477,12 +497,34 @@ function Auction({ rs, cat, me, act, host, left }) {
           </div>
         )}
         {host && (
-          <div style={{ marginTop: 10 }}>
-            <div className="mu" style={{ marginBottom: 6 }}>Jump to set (remaining players)</div>
-            <div className="seg" style={{ flexWrap: 'wrap' }}>
+          <div style={{ marginTop: 10 }} className="card" >
+            <div className="mu" style={{ marginBottom: 6 }}>Player order — jump to set</div>
+            <div className="seg" style={{ flexWrap: 'wrap', marginBottom: 10 }}>
               {[['MARQUEE', 'Marquee'], ['BAT_WK', 'Bat/WK'], ['AR', 'AR'], ['BOWL', 'Bowlers']].map(([k, lab]) => (
                 <button key={k} type="button" onClick={() => act('jumpSet', k)}>{lab}</button>
               ))}
+            </div>
+            <div className="mu" style={{ marginBottom: 6 }}>Bid timer</div>
+            <div className="seg" style={{ flexWrap: 'wrap', marginBottom: 10 }}>
+              {[5, 10, 12, 15].map(s => (
+                <button key={s} type="button" className={(rs.bidMs || 15000) === s * 1000 ? 'on' : ''} onClick={() => act('timer', s)}>{s}s</button>
+              ))}
+            </div>
+            <div className="mu" style={{ marginBottom: 6 }}>Host tools</div>
+            <div className="row" style={{ flexWrap: 'wrap', gap: 6 }}>
+              {[
+                ['sellNow', 'Sell now'],
+                ['markUnsold', 'Mark unsold'],
+                ['forceUnsold', 'Force unsold'],
+              ].map(([k, label]) => {
+                const on = !!(rs.opts || {})[k];
+                const next = { sellNow: !!rs.opts?.sellNow, markUnsold: !!rs.opts?.markUnsold, forceUnsold: !!rs.opts?.forceUnsold, sets: rs.opts?.sets !== false, [k]: !on };
+                return (
+                  <button key={k} type="button" className="btn sec" style={{ opacity: on ? 1 : 0.5, fontSize: 11, padding: '6px 10px' }} onClick={() => act('opts', next)}>
+                    {on ? '✓ ' : ''}{label}
+                  </button>
+                );
+              })}
             </div>
           </div>
         )}
@@ -520,22 +562,22 @@ function End({ rs, cat, me, act }) {
   const my = me?.team && rs.teams[me.team];
   const myXi = my?.xi || [];
 
-  const scorePlayer = (p, asBowler) => {
+  const scorePlayer = (p) => {
     if (!p) return 0;
-    let s = 0;
     const m = p.m || 0;
-    if (p.role === 'BOWL' || asBowler) {
-      s += (p.wkts || 0) * 8;
-      s += m * 1.5;
-      if (p.econ != null) s += Math.max(0, 12 - p.econ) * 15;
+    let s = 0;
+    if (p.role === 'BOWL') {
+      s = (p.wkts || 0) * 10 + m * 2;
+      if (p.econ != null) s += Math.max(0, 11 - p.econ) * 12;
+    } else if (p.role === 'AR') {
+      // balanced: half bat + half bowl weight so AR is not overpowered
+      const bat = (p.runs || 0) * 0.08 + m * 1.2 + (p.sr ? Math.max(0, p.sr - 125) * 0.3 : 0);
+      const bowl = (p.wkts || 0) * 6 + (p.econ != null ? Math.max(0, 11 - p.econ) * 8 : 0);
+      s = bat + bowl;
+    } else {
+      s = (p.runs || 0) * 0.12 + m * 1.5;
+      if (p.sr) s += Math.max(0, p.sr - 125) * 0.4;
     }
-    if (p.role !== 'BOWL' || p.role === 'AR') {
-      s += (p.runs || 0) * 0.1;
-      s += m * 1.2;
-      if (p.sr) s += Math.max(0, p.sr - 120) * 0.45;
-    }
-    if (p.role === 'AR') s += (p.wkts || 0) * 5;
-    if (p.capped) s *= 1.05;
     return Math.round(s);
   };
 
@@ -551,8 +593,7 @@ function End({ rs, cat, me, act }) {
       const xiIds = (tm.xi && tm.xi.length) ? tm.xi : tm.squad.map(x => x.id).slice(0, 11);
       const players = xiIds.map(id => {
         const p = P[id];
-        const asBowl = p && (p.role === 'BOWL' || p.role === 'AR');
-        return { ...p, score: scorePlayer(p, asBowl) };
+        return { ...p, score: scorePlayer(p) };
       }).filter(Boolean).sort((a, b) => b.score - a.score);
       const total = players.reduce((s, p) => s + p.score, 0);
       return { code, tm, players, total, xiCount: xiIds.length };
@@ -653,93 +694,61 @@ function Overlay({ ov, cat }) {
 
 function ChatBox({ rs, me }) {
   const [text, setText] = useState('');
-  const [gifPreview, setGifPreview] = useState(null);
   const [open, setOpen] = useState(false);
   const [msgs, setMsgs] = useState(rs.chat || []);
+  const [unread, setUnread] = useState(0);
   const endRef = useRef(null);
-  const fileInputRef = useRef(null);
-  const emojis = ['🔥', '😂', '👏', '💰', '🏏', '😱', '❤️', '👍', '🎯', '🚀'];
-
+  const lastSeen = useRef(0);
+  const emojis = ['🔥', '😂', '👏', '💰', '🏏', '😱', '❤️', '👍', '🎯', '🚀', '😮', '💪'];
+  useEffect(() => { setMsgs(rs.chat || []); }, [rs.chat]);
   useEffect(() => {
-    setMsgs(rs.chat || []);
-  }, [rs.chat]);
-
-  useEffect(() => {
-    const onChat = list => setMsgs(list || []);
+    const onChat = list => {
+      setMsgs(list || []);
+      if (!open) {
+        const newest = (list || []).length ? list[list.length - 1].at : 0;
+        if (newest > lastSeen.current) setUnread(u => u + 1);
+      }
+    };
     socket.on('chat', onChat);
     return () => socket.off('chat', onChat);
-  }, []);
-
-  useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [msgs, open, gifPreview]);
-
-  const loadMediaFile = file => {
-    if (!file) return;
-    if (file.size > 3 * 1024 * 1024) {
-      alert('GIF/image must be under 3MB');
-      return;
+  }, [open]);
+  useEffect(() => {
+    if (open) {
+      setUnread(0);
+      lastSeen.current = Date.now();
+      endRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
-    const reader = new FileReader();
-    reader.onload = e => {
-      if (e.target?.result) setGifPreview(e.target.result);
-    };
-    reader.readAsDataURL(file);
-  };
-
-  // Capture GIFs / images pasted directly from mobile keyboard (Gboard, Samsung, iOS) or clipboard
-  const handlePaste = e => {
-    const items = e.clipboardData?.items;
-    if (items && items.length) {
-      for (let i = 0; i < items.length; i++) {
-        const item = items[i];
-        if (item.type.startsWith('image/')) {
-          const file = item.getAsFile();
-          if (file) {
-            loadMediaFile(file);
-            e.preventDefault();
-            return;
-          }
-        }
-      }
-    }
-    const pasteTxt = (e.clipboardData?.getData('text/plain') || '').trim();
-    if (/^https?:\/\/.+\.(gif|webp|png|jpe?g)(\?.*)?$/i.test(pasteTxt) ||
-        /^https?:\/\/(media\.giphy\.com|media\.tenor\.com|c\.tenor\.com)\/.+/i.test(pasteTxt)) {
-      setGifPreview(pasteTxt);
-      e.preventDefault();
-    }
-  };
-
+  }, [open, msgs]);
   const send = (extra = {}) => {
-    let gifToSend = extra.gif || gifPreview || '';
-    let textToSend = (extra.text ?? text).trim();
-    // Auto-detect direct GIF link in text box
-    if (!gifToSend && (/^https?:\/\/.+\.(gif|webp|png|jpe?g)(\?.*)?$/i.test(textToSend) ||
-        /^https?:\/\/(media\.giphy\.com|media\.tenor\.com|c\.tenor\.com)\/.+/i.test(textToSend))) {
-      gifToSend = textToSend;
-      textToSend = '';
-    }
-    if (!textToSend && !gifToSend) return;
-    socket.emit('chat', { text: textToSend, gif: gifToSend }, r => {
-      if (r && !r.ok) {
-        alert(r.error || 'Failed to send message');
-        return;
+    let body = (extra.text ?? text).trim();
+    let gif = extra.gif || '';
+    // If user pasted a gif/image url in the text box, treat as gif
+    if (!gif && /^https:\/\/\S+\.(gif|webp|png|jpg|jpeg)(\?\S*)?$/i.test(body)) {
+      gif = body; body = '';
+    } else if (!gif) {
+      const m = body.match(/https:\/\/\S+/i);
+      if (m && /giphy|tenor|media\.|\.gif/i.test(m[0])) {
+        gif = m[0];
+        body = body.replace(m[0], '').trim();
       }
-      setText('');
-      setGifPreview(null);
-    });
+    }
+    if (!body && !gif) return;
+    socket.emit('chat', { text: body, gif }, r => { if (r && !r.ok) return; setText(''); });
   };
-
   return (
     <div className={`chat-wrap ${open ? 'open' : ''}`}>
-      <button type="button" className="chat-fab btn" onClick={() => setOpen(o => !o)}>{open ? '✕' : '💬 Chat'}</button>
+      <button type="button" className="chat-fab btn" onClick={() => setOpen(o => !o)}>
+        {open ? '✕' : '💬 Chat'}
+        {!open && unread > 0 && <span className="chat-dot">{unread > 9 ? '9+' : unread}</span>}
+      </button>
       {open && (
-        <div className="chat-panel card" onPaste={handlePaste}>
+        <div className="chat-panel card">
           <div className="chat-msgs">
             {(msgs || []).map(m => (
               <div key={m.id} className={`chat-line ${m.name === me?.name ? 'mine' : ''}`}>
                 <b>{m.name}{m.team ? ` (${m.team})` : ''}</b>
                 {m.text && <div>{m.text}</div>}
-                {m.gif && <img src={m.gif} alt="gif" className="chat-gif" loading="lazy" />}
+                {m.gif && <img src={m.gif} alt="gif" className="chat-gif" />}
               </div>
             ))}
             <div ref={endRef} />
@@ -747,41 +756,10 @@ function ChatBox({ rs, me }) {
           <div className="chat-emojis">
             {emojis.map(e => <button type="button" key={e} onClick={() => send({ text: e })}>{e}</button>)}
           </div>
-          {gifPreview && (
-            <div className="chat-preview">
-              <img src={gifPreview} alt="preview" />
-              <button type="button" onClick={() => setGifPreview(null)} title="Remove GIF">✕</button>
-            </div>
-          )}
-          <div className="row chat-actions" style={{ flexWrap: 'nowrap' }}>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/gif,image/webp,image/png,image/jpeg"
-              style={{ display: 'none' }}
-              onChange={e => {
-                const f = e.target.files?.[0];
-                if (f) loadMediaFile(f);
-                e.target.value = '';
-              }}
-            />
-            <button
-              type="button"
-              className="chat-gif-btn"
-              title="Add GIF from mobile keyboard or device"
-              onClick={() => fileInputRef.current?.click()}
-            >
-              GIF 🖼️
-            </button>
-            <input
-              value={text}
-              maxLength={300}
-              placeholder="Message or paste GIF…"
-              onPaste={handlePaste}
-              onChange={e => setText(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && send()}
-            />
-            <button type="button" className="btn sec" style={{ flexShrink: 0 }} onClick={() => send()}>Send</button>
+          <div className="mu" style={{ fontSize: 11 }}>Type a message or paste a GIF link (Giphy/Tenor). On phone use GIF keyboard → copy link → paste here.</div>
+          <div className="row" style={{ flexWrap: 'nowrap' }}>
+            <input value={text} maxLength={400} placeholder="Message or GIF url…" onChange={e => setText(e.target.value)} onKeyDown={e => e.key === 'Enter' && send()} />
+            <button type="button" className="btn sec" onClick={() => send()}>Send</button>
           </div>
         </div>
       )}
@@ -825,6 +803,7 @@ function App() {
     if (socket.connected) rejoin();
     const t = setInterval(() => tick(x => x + 1), 200);
     const onPop = () => {
+      // Browser back → home (leave room UI; can rejoin with code)
       sessionStorage.removeItem('code');
       setRs(null);
     };
